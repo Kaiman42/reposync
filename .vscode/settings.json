@@ -1,0 +1,10 @@
+{
+  // Integração: ao salvar qualquer arquivo dentro deste projeto, roda script leve.
+  // Requer extensão: 'emeraldwalk.runonsave' (Run On Save) ou similar.
+  "runOnSave.commands": [
+    {
+      "match": ".*",
+      "cmd": "python3 ${workspaceFolder}/on_save_update.py ${file}"
+    }
+  ]
+}
