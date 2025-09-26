@@ -14,8 +14,8 @@ Execute o script `reposync.py` para atualizar os ícones das pastas baseados no 
 
 - **not_init**: Pasta não é um repositório Git. Ícone: `folder-red`.
 - **clean**: Repositório inicializado, sem mudanças pendentes. Ícone: `folder-green`.
-- **staged**: Há arquivos staged para commit. Ícone: `folder-blue`.
-- **modified**: Há mudanças não staged. Ícone: `folder-yellow`.
+- **staged**: Há arquivos staged para commit. Ícone: `folder-yellow`.
+- **modified**: Há mudanças não staged. Ícone: `folder-orange`.
 - **untracked**: Há arquivos não rastreados. Ícone: `folder-purple`.
 
 O Dolphin lerá os arquivos `.directory` criados em cada pasta e exibirá os ícones correspondentes.

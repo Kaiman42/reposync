@@ -3,7 +3,6 @@ import os
 import subprocess
 import sys
 from datetime import datetime
-from typing import Optional
 try:
     from version import HOOK_VERSION
 except Exception:
@@ -16,8 +15,8 @@ base_paths = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
 icons = {
     'not_init': 'folder-red',
     'clean': 'folder-green',
-    'staged': 'folder-blue',
-    'modified': 'folder-yellow',
+    'staged': 'folder-yellow',
+    'modified': 'folder-orange',
     'untracked': 'folder-purple'
 }
 
