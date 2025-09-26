@@ -22,24 +22,24 @@ O Dolphin lerá os arquivos `.directory` criados em cada pasta e exibirá os íc
 
 ### Atualização automática sem F5
 
-Para atualizar ícones assim que arquivos mudam, use o watcher baseado em inotify:
+Para atualizar ícones automaticamente ao salvar arquivos em qualquer editor nos diretórios monitorados, use o watcher baseado em inotify:
 
 ```bash
 ./watch_repos.py
 ```
 
-Requer `inotifywait` (pacote `inotify-tools`). Ele observa os repositórios e dispara `reposync` com debounce (padrão 400ms) agregando múltiplos saves rápidos.
+Requer `inotify-tools` (instalado). Ele observa os repositórios e dispara `reposync` com debounce (padrão 400ms) agregando múltiplos saves rápidos.
 
 Variáveis opcionais:
 ```bash
-DEBOUNCE_MS=800 VERBOSE=1 ./watch_repos.py
+DEBOUNCE_MS=800 ./watch_repos.py
 ```
 
 Exemplo systemd (usuário) `~/.config/systemd/user/reposync-watcher.service`:
 ```
 [Unit]
-Description=RepoSync Watcher
-After=default.target
+Description=RepoSync Watcher (inotify)
+After=graphical-session.target
 
 [Service]
 Type=simple
@@ -47,17 +47,21 @@ Environment=DEBOUNCE_MS=500
 WorkingDirectory=%h/Repos/Meus/reposync
 ExecStart=%h/Repos/Meus/reposync/watch_repos.py
 Restart=on-failure
+RestartSec=2
 
 [Install]
 WantedBy=default.target
 ```
 Ativar:
 ```bash
+cp reposync-watcher.service ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now reposync-watcher.service
 ```
 
-Assim o Dolphin tende a refletir as mudanças automaticamente (combinação de `.directory`, mtime e sinais DBus).
+Isso monitora mudanças em arquivos dentro dos repos e atualiza ícones automaticamente.
+
+Para VS Code específico, configure "Run On Save" como acima, mas o watcher cobre qualquer editor.
 
 ## Automação
 
@@ -77,6 +81,8 @@ Agora há um controle de versão dos hooks:
 - A versão atual está em `version.py` (`HOOK_VERSION`).
 - Cada hook gerado contém uma linha `# hook-version: X.Y.Z`.
 - Se você modificar o template dos hooks (em `install_hooks.py`) e incrementar a versão, pode forçar a reinstalação.
+
+Hooks instalados: `post-commit`, `post-merge`, `post-checkout`, `post-rewrite`, `post-applypatch`, `post-reset`, `post-update`, `post-switch`.
 
 Formas de atualizar:
 

@@ -22,20 +22,10 @@ icons = {
 }
 
 def refresh_dolphin(quiet: bool=True):
-    """Tenta forçar o Dolphin a recarregar ícones.
-    Estratégias:
-    1. qdbus org.kde.dolphin /dolphin/Dolphin_1 org.qtproject.Qt.QWidget.update -> (nem sempre exposto)
-    2. qdbus org.kde.dolphin /dolphin/Dolphin_1 refresh (algumas versões possuem método refresh)
-    3. Enviar F5 via qdbus para janela ativa do Dolphin (hack; pode falhar)
-    4. Sinalizar mudança em .directory tocando o mtime (já fazemos ao sobrescrever)
-    5. Se nada funcionar, tentar reiniciar o kded ícone de thumbnails (não feito para evitar agressividade)
-    A função é best-effort e silenciosa se falhar.
-    """
-    # Se qdbus não existe, aborta.
+    """Tenta forçar o Dolphin a recarregar ícones."""
     if not shutil.which('qdbus') and not shutil.which('qdbus6'):
         return False
     qdbus_bin = shutil.which('qdbus') or shutil.which('qdbus6')
-
     cmds = [
         [qdbus_bin, 'org.kde.dolphin', '/dolphin/Dolphin_1', 'refresh'],
         [qdbus_bin, 'org.kde.dolphin', '/dolphin/Dolphin_1', 'org.qtproject.Qt.QWidget.update'],
@@ -50,10 +40,7 @@ def refresh_dolphin(quiet: bool=True):
     return False
 
 def kdir_notify(paths, quiet: bool=True):
-    """Emite sinais KDirNotify para forçar atualização de views (Dolphin, etc.).
-    Usa dbus-send no barramento de sessão.
-    Envia DirectoryChanged para cada caminho distinto.
-    """
+    """Emite sinais KDirNotify."""
     if not paths:
         return False
     dbus_send = shutil.which('dbus-send')
@@ -71,7 +58,6 @@ def kdir_notify(paths, quiet: bool=True):
         if p in sent:
             continue
         sent.add(p)
-        # org.kde.KDirNotify.DirectoryChanged(url) -> usa file://
         norm = p.rstrip('/') + '/'
         url = 'file://' + norm
         cmd = [dbus_send, '--session', '--dest=org.kde.KDirNotify', '/KDirNotify', 'org.kde.KDirNotify.DirectoryChanged', f'string:{url}']
@@ -81,7 +67,6 @@ def kdir_notify(paths, quiet: bool=True):
                 success = True
         except Exception:
             pass
-        # Também tentar FilesChanged (lista de urls)
         cmd2 = [dbus_send, '--session', '--dest=org.kde.KDirNotify', '/KDirNotify', 'org.kde.KDirNotify.FilesChanged', f'array:string:{url}']
         try:
             r2 = subprocess.run(cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)

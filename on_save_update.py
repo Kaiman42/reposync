@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
 """Script para ser chamado pelo editor no evento de salvar arquivo.
-Recebe um caminho de arquivo (ou vários) e descobre o repositório Git raiz.
-Atualiza somente aquele repositório via reposync para minimizar custo.
+Recebe um caminho de arquivo e descobre o repositório Git raiz.
+Atualiza somente aquele repositório via reposync e força refresh do Dolphin.
 Uso típico (VS Code runOnSave):
   python /home/kaiman/Repos/Meus/reposync/on_save_update.py ${file}
 """
 import os
 import sys
 import subprocess
-from typing import Optional
 
 REPOSYNC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reposync.py')
 
-
-def find_git_root(path: str) -> Optional[str]:
+def find_git_root(path: str):
     path = os.path.abspath(path)
-    if os.path.isdir(path) and not os.path.isfile(path):
-        candidate = path
-    else:
-        candidate = os.path.dirname(path)
+    candidate = os.path.dirname(path) if os.path.isfile(path) else path
     while True:
         if os.path.isdir(os.path.join(candidate, '.git')):
             return candidate
@@ -27,28 +22,35 @@ def find_git_root(path: str) -> Optional[str]:
             return None
         candidate = new_candidate
 
-
 def update_repo(repo: str):
-    # Executa reposync apenas para esse repo. Permite verbose via env.
-    verbose = os.environ.get('REPOSYNC_VERBOSE') == '1'
-    cmd = [REPOSYNC, repo, '--ensure-hooks']
-    if not verbose:
-        cmd.append('-q')
-    subprocess.run(cmd, stdout=subprocess.DEVNULL if not verbose else None, stderr=subprocess.DEVNULL if not verbose else None)
+    subprocess.run([REPOSYNC, repo, '--ensure-hooks', '-q'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
+def refresh_dolphin():
+    # Força refresh do Dolphin via qdbus
+    qdbus = subprocess.run(['which', 'qdbus'], capture_output=True, text=True)
+    if qdbus.returncode != 0:
+        return
+    qdbus_bin = qdbus.stdout.strip()
+    cmds = [
+        [qdbus_bin, 'org.kde.dolphin', '/dolphin/Dolphin_1', 'refresh'],
+        [qdbus_bin, 'org.kde.dolphin', '/dolphin/Dolphin_1', 'org.qtproject.Qt.QWidget.update']
+    ]
+    for cmd in cmds:
+        try:
+            subprocess.run(cmd, timeout=1, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except:
+            pass
 
 def main(argv):
-    # Remover flags desconhecidas que editores possam inserir acidentalmente.
-    files = [a for a in argv if not a.startswith('-')]
+    files = [a for a in argv if not a.startswith('-') and a.strip()]
     repos = set()
     for f in files:
-        if not f.strip():
-            continue
         root = find_git_root(f)
         if root:
             repos.add(root)
     for repo in repos:
         update_repo(repo)
+    refresh_dolphin()
 
 if __name__ == '__main__':
     main(sys.argv[1:])
