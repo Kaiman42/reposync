@@ -5,8 +5,8 @@ After=graphical-session.target
 [Service]
 Type=simple
 Environment=DEBOUNCE_MS=500
-WorkingDirectory=%h/Repos/Meus/reposync
-ExecStart=%h/Repos/Meus/reposync/watch_repos.py
+WorkingDirectory=%h/Repos/Meus/reposync/bin
+ExecStart=%h/Repos/Meus/reposync/bin/watch_repos.py
 Restart=on-failure
 RestartSec=2
 

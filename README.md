@@ -4,10 +4,10 @@ Script para exibir ícones no Dolphin indicando o status Git dos repositórios n
 
 ## Como usar
 
-Execute o script `bin/reposync.py` para atualizar os ícones das pastas baseados no status Git.
+Execute o script `reposync.py` para atualizar os ícones das pastas baseados no status Git.
 
 ```bash
-./bin/reposync.py
+./reposync.py
 ```
 
 ## Status e Ícones
@@ -44,7 +44,7 @@ After=graphical-session.target
 [Service]
 Type=simple
 Environment=DEBOUNCE_MS=500
-WorkingDirectory=%h/Repos/Meus/reposync
+WorkingDirectory=%h/Repos/Meus/reposync/bin
 ExecStart=%h/Repos/Meus/reposync/bin/watch_repos.py
 Restart=on-failure
 RestartSec=2
@@ -70,7 +70,7 @@ Para executar automaticamente, adicione ao cron ou crie um serviço systemd.
 Exemplo para cron (a cada 5 minutos):
 
 ```bash
-*/5 * * * * /home/kaiman/Repos/Meus/reposync/bin/reposync.py
+*/5 * * * * /home/kaiman/Repos/Meus/reposync/reposync.py
 ```
 
 ### Reinstalação automática de hooks
@@ -88,30 +88,30 @@ Formas de atualizar:
 
 1. Manual (todos os repositórios padrão):
 	```bash
-	./bin/install_hooks.py
+	./install_hooks.py
 	```
 2. Forçar (mesmo se versão igual):
 	```bash
-	./bin/install_hooks.py --force
+	./install_hooks.py --force
 	```
 3. Apenas repositórios específicos:
 	```bash
-	./bin/install_hooks.py /caminho/do/repo1 /caminho/do/repo2
+	./install_hooks.py /caminho/do/repo1 /caminho/do/repo2
 	```
 4. Reinstalar ao rodar sincronização (verificando versão):
 	```bash
-	./bin/reposync.py --ensure-hooks
+	./reposync.py --ensure-hooks
 	```
 5. Forçar via reposync:
 	```bash
-	./bin/reposync.py --ensure-hooks --force-hooks
+	./reposync.py --ensure-hooks --force-hooks
 	```
 
 Assim, sempre que alterar a lógica dos hooks é só atualizar `HOOK_VERSION` e rodar um dos comandos acima.
 
 ## Integração com o Editor (Atualização ao Salvar)
 
-Para atualizar o ícone logo após salvar arquivos (antes mesmo de um commit), foi adicionado o script `bin/on_save_update.py`.
+Para atualizar o ícone logo após salvar arquivos (antes mesmo de um commit), foi adicionado o script `on_save_update.py`.
 
 ### VS Code
 1. Instale a extensão "Run On Save" (emeraldwalk.runonsave).
@@ -119,7 +119,7 @@ Para atualizar o ícone logo após salvar arquivos (antes mesmo de um commit), f
 	 ```json
 	 {
 		 "runOnSave.commands": [
-			 { "match": ".*", "cmd": "python3 ${workspaceFolder}/bin/on_save_update.py ${file}" }
+			 { "match": ".*", "cmd": "python3 ${workspaceFolder}/on_save_update.py ${file}" }
 		 ]
 	 }
 	 ```
@@ -130,7 +130,7 @@ Para atualizar o ícone logo após salvar arquivos (antes mesmo de um commit), f
 vim.api.nvim_create_autocmd({"BufWritePost"}, {
 	pattern = "*",
 	callback = function(args)
-		vim.fn.jobstart({"python3", "/home/kaiman/Repos/Meus/reposync/bin/on_save_update.py", args.file}, {detach=true})
+		vim.fn.jobstart({"python3", "/home/kaiman/Repos/Meus/reposync/on_save_update.py", args.file}, {detach=true})
 	end
 })
 ```
@@ -139,7 +139,7 @@ vim.api.nvim_create_autocmd({"BufWritePost"}, {
 Use File Watchers:
 1. Settings > Tools > File Watchers > + (Custom)
 2. Program: `python3`
-3. Arguments: `/home/kaiman/Repos/Meus/reposync/bin/on_save_update.py $FilePath$`
+3. Arguments: `/home/kaiman/Repos/Meus/reposync/on_save_update.py $FilePath$`
 4. Working dir: `$ProjectFileDir$`
 5. Desmarcar “Immediate Sync” se quiser agrupar.
 
@@ -155,4 +155,3 @@ O script já de-duplifica múltiplos arquivos do mesmo repositório no mesmo dis
 - Python 3
 - Git
 - Dolphin (para visualizar os ícones)
-# test

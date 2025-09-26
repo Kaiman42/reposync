@@ -4,10 +4,7 @@ import subprocess
 import sys
 import shutil
 from datetime import datetime
-try:
-    from version import HOOK_VERSION
-except Exception:
-    HOOK_VERSION = "0.0.0"
+HOOK_VERSION = "0.0.0"
 
 # Caminhos base
 base_paths = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
@@ -48,13 +45,7 @@ def kdir_notify(paths, quiet: bool=True):
         return False
     success = False
     sent = set()
-    expanded = set()
     for p in paths:
-        expanded.add(p)
-        parent = os.path.dirname(p.rstrip('/'))
-        if parent and parent not in paths:
-            expanded.add(parent)
-    for p in expanded:
         if p in sent:
             continue
         sent.add(p)
@@ -64,13 +55,6 @@ def kdir_notify(paths, quiet: bool=True):
         try:
             r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
             if r.returncode == 0:
-                success = True
-        except Exception:
-            pass
-        cmd2 = [dbus_send, '--session', '--dest=org.kde.KDirNotify', '/KDirNotify', 'org.kde.KDirNotify.FilesChanged', f'array:string:{url}']
-        try:
-            r2 = subprocess.run(cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
-            if r2.returncode == 0:
                 success = True
         except Exception:
             pass
@@ -166,7 +150,7 @@ def ensure_hooks(repo: str, force: bool=False, quiet: bool=True):
     if not force and cur == HOOK_VERSION:
         return False
     # Chama install_hooks.py somente para este repo
-    installer = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'install_hooks.py')
+    installer = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'install_hooks.py')
     if os.path.isfile(installer):
         try:
             subprocess.run([installer, repo], check=False, stdout=subprocess.DEVNULL if quiet else None, stderr=subprocess.DEVNULL if quiet else None)
@@ -212,17 +196,9 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
         out(f"Total: {processed} repos")
     # Primeiro tenta notificar via KDirNotify
     notified = kdir_notify(processed_paths, quiet=True)
-    refreshed = False
     if not notified:
         # Fallback para método anterior
-        refreshed = refresh_dolphin(quiet=True)
-    if not quiet:
-        if notified:
-            out("KDirNotify emitido")
-        elif refreshed:
-            out("Dolphin refresh solicitado (fallback)")
-        else:
-            out("Não foi possível sinalizar atualização do Dolphin")
+        refresh_dolphin(quiet=True)
 
 if __name__ == "__main__":
     args = []

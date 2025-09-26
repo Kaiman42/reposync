@@ -9,7 +9,7 @@ import os
 import sys
 import subprocess
 
-REPOSYNC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'reposync.py')
+REPOSYNC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reposync.py')
 
 def find_git_root(path: str):
     path = os.path.abspath(path)
@@ -42,13 +42,16 @@ def refresh_dolphin():
             pass
 
 def main(argv):
+    print(f"on_save_update chamado com: {argv}", flush=True)  # Debug
     files = [a for a in argv if not a.startswith('-') and a.strip()]
     repos = set()
     for f in files:
         root = find_git_root(f)
         if root:
             repos.add(root)
+    print(f"Repos encontrados: {repos}", flush=True)  # Debug
     for repo in repos:
+        print(f"Atualizando {repo}", flush=True)  # Debug
         update_repo(repo)
     refresh_dolphin()
 

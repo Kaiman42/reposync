@@ -17,14 +17,13 @@ import sys
 import time
 import subprocess
 import threading
-from collections import defaultdict
 
-SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REPOSYNC = os.path.join(SCRIPT_DIR, 'bin', 'reposync.py')
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+REPOSYNC = os.path.join(SCRIPT_DIR, 'reposync.py')
 
 DEFAULT_BASES = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
 
-DEBOUNCE_MS = int(os.environ.get('DEBOUNCE_MS', '400'))
+DEBOUNCE_MS = int(os.environ.get('DEBOUNCE_MS', '2000'))
 
 def log(msg):
     print(msg, flush=True)
@@ -58,26 +57,28 @@ def run_reposync(repo):
 
 def watcher_loop(paths):
     # Monta comando inotifywait recursivo para os paths
-    cmd = ['inotifywait', '-m', '-r', '-e', 'close_write,create,delete,move'] + paths
+    cmd = ['inotifywait', '-m', '-r', '-e', 'modify,attrib,close_write,create,delete,move'] + paths
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
     except FileNotFoundError:
         print('Erro: inotifywait não encontrado.', file=sys.stderr)
         sys.exit(1)
 
-    pending = {}
+    pending = set()
+    last_run = {}
     lock = threading.Lock()
 
     def debounce_thread():
         while True:
-            time.sleep(DEBOUNCE_MS / 1000.0 / 2)
+            time.sleep(0.2)
             now = time.time()
             to_run = []
             with lock:
-                for repo, ts in list(pending.items()):
-                    if now - ts >= DEBOUNCE_MS / 1000.0:
+                for repo in list(pending):
+                    if repo not in last_run or now - last_run.get(repo, 0) >= DEBOUNCE_MS / 1000.0:
                         to_run.append(repo)
-                        del pending[repo]
+                        last_run[repo] = now
+                pending.clear()
             for r in to_run:
                 log(f"reposync {r}")
                 run_reposync(r)
@@ -99,8 +100,7 @@ def watcher_loop(paths):
         if not repo:
             continue
         with lock:
-            pending[repo] = time.time()
-    proc.wait()
+            pending.add(repo)
 
 def main(argv):
     bases = argv if argv else DEFAULT_BASES
