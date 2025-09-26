@@ -74,6 +74,8 @@ def kdir_notify(paths, quiet: bool=True):
                 success = True
         except Exception:
             pass
+    return success
+
 def get_git_status(path):
     if not os.path.isdir(os.path.join(path, '.git')):
         return 'not_init'
@@ -176,6 +178,7 @@ def ensure_hooks(repo: str, force: bool=False, quiet: bool=True):
 def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
     processed = 0
     changed_summary = {k:0 for k in icons.keys()}
+    processed_paths = []
     def out(msg):
         if not quiet:
             print(msg)
@@ -195,6 +198,7 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
         changed_summary[status] = changed_summary.get(status,0)+1
         out(f"{repo}: {status}")
         processed += 1
+        processed_paths.append(repo)
     if log:
         try:
             log_dir = os.path.join(os.path.expanduser('~'), '.cache')
@@ -206,6 +210,19 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
             pass
     if not quiet:
         out(f"Total: {processed} repos")
+    # Primeiro tenta notificar via KDirNotify
+    notified = kdir_notify(processed_paths, quiet=True)
+    refreshed = False
+    if not notified:
+        # Fallback para método anterior
+        refreshed = refresh_dolphin(quiet=True)
+    if not quiet:
+        if notified:
+            out("KDirNotify emitido")
+        elif refreshed:
+            out("Dolphin refresh solicitado (fallback)")
+        else:
+            out("Não foi possível sinalizar atualização do Dolphin")
 
 if __name__ == "__main__":
     args = []
