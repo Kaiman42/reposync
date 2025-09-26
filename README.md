@@ -155,3 +155,4 @@ O script já de-duplifica múltiplos arquivos do mesmo repositório no mesmo dis
 - Python 3
 - Git
 - Dolphin (para visualizar os ícones)
+# test
