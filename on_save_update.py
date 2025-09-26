@@ -29,8 +29,12 @@ def find_git_root(path: str) -> Optional[str]:
 
 
 def update_repo(repo: str):
-    # Executa reposync apenas para esse repo em modo quiet.
-    subprocess.run([REPOSYNC, repo, '--ensure-hooks', '-q'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Executa reposync apenas para esse repo. Permite verbose via env.
+    verbose = os.environ.get('REPOSYNC_VERBOSE') == '1'
+    cmd = [REPOSYNC, repo, '--ensure-hooks']
+    if not verbose:
+        cmd.append('-q')
+    subprocess.run(cmd, stdout=subprocess.DEVNULL if not verbose else None, stderr=subprocess.DEVNULL if not verbose else None)
 
 
 def main(argv):

@@ -49,6 +49,48 @@ def refresh_dolphin(quiet: bool=True):
             pass
     return False
 
+def kdir_notify(paths, quiet: bool=True):
+    """Emite sinais KDirNotify para forçar atualização de views (Dolphin, etc.).
+    Usa dbus-send no barramento de sessão.
+    Envia DirectoryChanged para cada caminho distinto.
+    """
+    if not paths:
+        return False
+    dbus_send = shutil.which('dbus-send')
+    if not dbus_send:
+        return False
+    success = False
+    sent = set()
+    expanded = set()
+    for p in paths:
+        expanded.add(p)
+        parent = os.path.dirname(p.rstrip('/'))
+        if parent and parent not in paths:
+            expanded.add(parent)
+    for p in expanded:
+        if p in sent:
+            continue
+        sent.add(p)
+        # org.kde.KDirNotify.DirectoryChanged(url) -> usa file://
+        norm = p.rstrip('/') + '/'
+        url = 'file://' + norm
+        cmd = [dbus_send, '--session', '--dest=org.kde.KDirNotify', '/KDirNotify', 'org.kde.KDirNotify.DirectoryChanged', f'string:{url}']
+        try:
+            r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+            if r.returncode == 0:
+                success = True
+        except Exception:
+            pass
+        # Também tentar FilesChanged (lista de urls)
+        cmd2 = [dbus_send, '--session', '--dest=org.kde.KDirNotify', '/KDirNotify', 'org.kde.KDirNotify.FilesChanged', f'array:string:{url}']
+        try:
+            r2 = subprocess.run(cmd2, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+            if r2.returncode == 0:
+                success = True
+        except Exception:
+            pass
+    return success
+
 def get_git_status(path):
     if not os.path.isdir(os.path.join(path, '.git')):
         return 'not_init'
@@ -84,6 +126,15 @@ Icon={icon}
 """
     with open(directory_file, 'w') as f:
         f.write(content)
+    # Toca mtime da pasta e do pai para ajudar o Dolphin a perceber mudança
+    try:
+        now = None  # usa tempo atual
+        os.utime(path, None)
+        parent = os.path.dirname(path.rstrip('/'))
+        if parent and os.path.isdir(parent):
+            os.utime(parent, None)
+    except Exception:
+        pass
 
 def iter_repos_in(path):
     """Itera repositórios diretos dentro de um caminho base."""
@@ -112,36 +163,7 @@ def collect_targets(targets):
                     seen.add(repo)
                     yield repo
 
-## A primeira definição de main foi substituída mais abaixo (mantido comentário para contexto)
-    processed = 0
-    changed_summary = {k:0 for k in icons.keys()}
-    def out(msg):
-        if not quiet:
-            print(msg)
-    if targets:
-        repos = list(collect_targets(targets))
-    else:
-        repos = []
-        for base in base_paths:
-            repos.extend(list(iter_repos_in(base)))
-    for repo in repos:
-        status = get_git_status(repo)
-        update_directory_icon(repo, status)
-        changed_summary[status] = changed_summary.get(status,0)+1
-        out(f"{repo}: {status}")
-        processed += 1
-    if log:
-        # grava log simples em ~/.cache/reposync.log
-        try:
-            log_dir = os.path.join(os.path.expanduser('~'), '.cache')
-            os.makedirs(log_dir, exist_ok=True)
-            with open(os.path.join(log_dir, 'reposync.log'), 'a') as f:
-                summary = " ".join(f"{k}={v}" for k,v in changed_summary.items())
-                f.write(f"[{datetime.now().isoformat(timespec='seconds')}] processed={processed} {summary}\n")
-        except Exception:
-            pass
-    if not quiet:
-        out(f"Total: {processed} repos")
+## (Bloco antigo de main removido)
 
 def hook_current_version(repo: str) -> str:
     path = os.path.join(repo, '.git', 'hooks', 'post-commit')
@@ -173,6 +195,7 @@ def ensure_hooks(repo: str, force: bool=False, quiet: bool=True):
 def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
     processed = 0
     changed_summary = {k:0 for k in icons.keys()}
+    processed_paths = []
     def out(msg):
         if not quiet:
             print(msg)
@@ -192,6 +215,7 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
         changed_summary[status] = changed_summary.get(status,0)+1
         out(f"{repo}: {status}")
         processed += 1
+        processed_paths.append(repo)
     if log:
         try:
             log_dir = os.path.join(os.path.expanduser('~'), '.cache')
@@ -203,10 +227,19 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
             pass
     if not quiet:
         out(f"Total: {processed} repos")
-    # Tenta refresh Dolphin (best-effort)
-    refreshed = refresh_dolphin(quiet=True)
-    if not quiet and refreshed:
-        out("Dolphin refresh solicitado")
+    # Primeiro tenta notificar via KDirNotify
+    notified = kdir_notify(processed_paths, quiet=True)
+    refreshed = False
+    if not notified:
+        # Fallback para método anterior
+        refreshed = refresh_dolphin(quiet=True)
+    if not quiet:
+        if notified:
+            out("KDirNotify emitido")
+        elif refreshed:
+            out("Dolphin refresh solicitado (fallback)")
+        else:
+            out("Não foi possível sinalizar atualização do Dolphin")
 
 if __name__ == "__main__":
     args = []

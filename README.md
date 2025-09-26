@@ -20,6 +20,45 @@ Execute o script `reposync.py` para atualizar os ícones das pastas baseados no 
 
 O Dolphin lerá os arquivos `.directory` criados em cada pasta e exibirá os ícones correspondentes.
 
+### Atualização automática sem F5
+
+Para atualizar ícones assim que arquivos mudam, use o watcher baseado em inotify:
+
+```bash
+./watch_repos.py
+```
+
+Requer `inotifywait` (pacote `inotify-tools`). Ele observa os repositórios e dispara `reposync` com debounce (padrão 400ms) agregando múltiplos saves rápidos.
+
+Variáveis opcionais:
+```bash
+DEBOUNCE_MS=800 VERBOSE=1 ./watch_repos.py
+```
+
+Exemplo systemd (usuário) `~/.config/systemd/user/reposync-watcher.service`:
+```
+[Unit]
+Description=RepoSync Watcher
+After=default.target
+
+[Service]
+Type=simple
+Environment=DEBOUNCE_MS=500
+WorkingDirectory=%h/Repos/Meus/reposync
+ExecStart=%h/Repos/Meus/reposync/watch_repos.py
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+Ativar:
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now reposync-watcher.service
+```
+
+Assim o Dolphin tende a refletir as mudanças automaticamente (combinação de `.directory`, mtime e sinais DBus).
+
 ## Automação
 
 Para executar automaticamente, adicione ao cron ou crie um serviço systemd.
