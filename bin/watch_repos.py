@@ -19,8 +19,8 @@ import subprocess
 import threading
 from collections import defaultdict
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPOSYNC = os.path.join(SCRIPT_DIR, 'reposync.py')
+SCRIPT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPOSYNC = os.path.join(SCRIPT_DIR, 'bin', 'reposync.py')
 
 DEFAULT_BASES = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
 

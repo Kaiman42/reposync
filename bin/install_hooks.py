@@ -8,7 +8,7 @@ except Exception:
 
 BASES = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
 # Caminho absoluto para o script principal (evita depender de $PWD dentro do hook)
-REPOSYNC = '/home/kaiman/Repos/Meus/reposync/reposync.py'
+REPOSYNC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'reposync.py')
 HOOKS = [
     'post-commit',
     'post-merge',

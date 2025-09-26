@@ -9,7 +9,7 @@ import os
 import sys
 import subprocess
 
-REPOSYNC = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reposync.py')
+REPOSYNC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'reposync.py')
 
 def find_git_root(path: str):
     path = os.path.abspath(path)

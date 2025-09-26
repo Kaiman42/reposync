@@ -74,8 +74,6 @@ def kdir_notify(paths, quiet: bool=True):
                 success = True
         except Exception:
             pass
-    return success
-
 def get_git_status(path):
     if not os.path.isdir(os.path.join(path, '.git')):
         return 'not_init'
@@ -148,8 +146,6 @@ def collect_targets(targets):
                     seen.add(repo)
                     yield repo
 
-## (Bloco antigo de main removido)
-
 def hook_current_version(repo: str) -> str:
     path = os.path.join(repo, '.git', 'hooks', 'post-commit')
     if not os.path.isfile(path):
@@ -168,7 +164,7 @@ def ensure_hooks(repo: str, force: bool=False, quiet: bool=True):
     if not force and cur == HOOK_VERSION:
         return False
     # Chama install_hooks.py somente para este repo
-    installer = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'install_hooks.py')
+    installer = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'install_hooks.py')
     if os.path.isfile(installer):
         try:
             subprocess.run([installer, repo], check=False, stdout=subprocess.DEVNULL if quiet else None, stderr=subprocess.DEVNULL if quiet else None)
@@ -180,7 +176,6 @@ def ensure_hooks(repo: str, force: bool=False, quiet: bool=True):
 def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
     processed = 0
     changed_summary = {k:0 for k in icons.keys()}
-    processed_paths = []
     def out(msg):
         if not quiet:
             print(msg)
@@ -200,7 +195,6 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
         changed_summary[status] = changed_summary.get(status,0)+1
         out(f"{repo}: {status}")
         processed += 1
-        processed_paths.append(repo)
     if log:
         try:
             log_dir = os.path.join(os.path.expanduser('~'), '.cache')
@@ -212,19 +206,6 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
             pass
     if not quiet:
         out(f"Total: {processed} repos")
-    # Primeiro tenta notificar via KDirNotify
-    notified = kdir_notify(processed_paths, quiet=True)
-    refreshed = False
-    if not notified:
-        # Fallback para método anterior
-        refreshed = refresh_dolphin(quiet=True)
-    if not quiet:
-        if notified:
-            out("KDirNotify emitido")
-        elif refreshed:
-            out("Dolphin refresh solicitado (fallback)")
-        else:
-            out("Não foi possível sinalizar atualização do Dolphin")
 
 if __name__ == "__main__":
     args = []

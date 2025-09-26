@@ -4,10 +4,10 @@ Script para exibir ícones no Dolphin indicando o status Git dos repositórios n
 
 ## Como usar
 
-Execute o script `reposync.py` para atualizar os ícones das pastas baseados no status Git.
+Execute o script `bin/reposync.py` para atualizar os ícones das pastas baseados no status Git.
 
 ```bash
-./reposync.py
+./bin/reposync.py
 ```
 
 ## Status e Ícones
@@ -25,14 +25,14 @@ O Dolphin lerá os arquivos `.directory` criados em cada pasta e exibirá os íc
 Para atualizar ícones automaticamente ao salvar arquivos em qualquer editor nos diretórios monitorados, use o watcher baseado em inotify:
 
 ```bash
-./watch_repos.py
+./bin/watch_repos.py
 ```
 
 Requer `inotify-tools` (instalado). Ele observa os repositórios e dispara `reposync` com debounce (padrão 400ms) agregando múltiplos saves rápidos.
 
 Variáveis opcionais:
 ```bash
-DEBOUNCE_MS=800 ./watch_repos.py
+DEBOUNCE_MS=800 ./bin/watch_repos.py
 ```
 
 Exemplo systemd (usuário) `~/.config/systemd/user/reposync-watcher.service`:
@@ -45,7 +45,7 @@ After=graphical-session.target
 Type=simple
 Environment=DEBOUNCE_MS=500
 WorkingDirectory=%h/Repos/Meus/reposync
-ExecStart=%h/Repos/Meus/reposync/watch_repos.py
+ExecStart=%h/Repos/Meus/reposync/bin/watch_repos.py
 Restart=on-failure
 RestartSec=2
 
@@ -70,7 +70,7 @@ Para executar automaticamente, adicione ao cron ou crie um serviço systemd.
 Exemplo para cron (a cada 5 minutos):
 
 ```bash
-*/5 * * * * /home/kaiman/Repos/Meus/reposync/reposync.py
+*/5 * * * * /home/kaiman/Repos/Meus/reposync/bin/reposync.py
 ```
 
 ### Reinstalação automática de hooks
@@ -88,30 +88,30 @@ Formas de atualizar:
 
 1. Manual (todos os repositórios padrão):
 	```bash
-	./install_hooks.py
+	./bin/install_hooks.py
 	```
 2. Forçar (mesmo se versão igual):
 	```bash
-	./install_hooks.py --force
+	./bin/install_hooks.py --force
 	```
 3. Apenas repositórios específicos:
 	```bash
-	./install_hooks.py /caminho/do/repo1 /caminho/do/repo2
+	./bin/install_hooks.py /caminho/do/repo1 /caminho/do/repo2
 	```
 4. Reinstalar ao rodar sincronização (verificando versão):
 	```bash
-	./reposync.py --ensure-hooks
+	./bin/reposync.py --ensure-hooks
 	```
 5. Forçar via reposync:
 	```bash
-	./reposync.py --ensure-hooks --force-hooks
+	./bin/reposync.py --ensure-hooks --force-hooks
 	```
 
 Assim, sempre que alterar a lógica dos hooks é só atualizar `HOOK_VERSION` e rodar um dos comandos acima.
 
 ## Integração com o Editor (Atualização ao Salvar)
 
-Para atualizar o ícone logo após salvar arquivos (antes mesmo de um commit), foi adicionado o script `on_save_update.py`.
+Para atualizar o ícone logo após salvar arquivos (antes mesmo de um commit), foi adicionado o script `bin/on_save_update.py`.
 
 ### VS Code
 1. Instale a extensão "Run On Save" (emeraldwalk.runonsave).
@@ -119,7 +119,7 @@ Para atualizar o ícone logo após salvar arquivos (antes mesmo de um commit), f
 	 ```json
 	 {
 		 "runOnSave.commands": [
-			 { "match": ".*", "cmd": "python3 ${workspaceFolder}/on_save_update.py ${file}" }
+			 { "match": ".*", "cmd": "python3 ${workspaceFolder}/bin/on_save_update.py ${file}" }
 		 ]
 	 }
 	 ```
@@ -130,7 +130,7 @@ Para atualizar o ícone logo após salvar arquivos (antes mesmo de um commit), f
 vim.api.nvim_create_autocmd({"BufWritePost"}, {
 	pattern = "*",
 	callback = function(args)
-		vim.fn.jobstart({"python3", "/home/kaiman/Repos/Meus/reposync/on_save_update.py", args.file}, {detach=true})
+		vim.fn.jobstart({"python3", "/home/kaiman/Repos/Meus/reposync/bin/on_save_update.py", args.file}, {detach=true})
 	end
 })
 ```
@@ -139,7 +139,7 @@ vim.api.nvim_create_autocmd({"BufWritePost"}, {
 Use File Watchers:
 1. Settings > Tools > File Watchers > + (Custom)
 2. Program: `python3`
-3. Arguments: `/home/kaiman/Repos/Meus/reposync/on_save_update.py $FilePath$`
+3. Arguments: `/home/kaiman/Repos/Meus/reposync/bin/on_save_update.py $FilePath$`
 4. Working dir: `$ProjectFileDir$`
 5. Desmarcar “Immediate Sync” se quiser agrupar.
 

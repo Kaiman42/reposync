@@ -4,7 +4,7 @@
   "runOnSave.commands": [
     {
       "match": ".*",
-      "cmd": "python3 ${workspaceFolder}/on_save_update.py ${file}"
+      "cmd": "python3 ${workspaceFolder}/bin/on_save_update.py ${file}"
     }
   ]
 }
