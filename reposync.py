@@ -2,6 +2,7 @@
 import os
 import subprocess
 import sys
+import shutil
 from datetime import datetime
 try:
     from version import HOOK_VERSION
@@ -19,6 +20,34 @@ icons = {
     'modified': 'folder-orange',
     'untracked': 'folder-purple'
 }
+
+def refresh_dolphin(quiet: bool=True):
+    """Tenta forçar o Dolphin a recarregar ícones.
+    Estratégias:
+    1. qdbus org.kde.dolphin /dolphin/Dolphin_1 org.qtproject.Qt.QWidget.update -> (nem sempre exposto)
+    2. qdbus org.kde.dolphin /dolphin/Dolphin_1 refresh (algumas versões possuem método refresh)
+    3. Enviar F5 via qdbus para janela ativa do Dolphin (hack; pode falhar)
+    4. Sinalizar mudança em .directory tocando o mtime (já fazemos ao sobrescrever)
+    5. Se nada funcionar, tentar reiniciar o kded ícone de thumbnails (não feito para evitar agressividade)
+    A função é best-effort e silenciosa se falhar.
+    """
+    # Se qdbus não existe, aborta.
+    if not shutil.which('qdbus') and not shutil.which('qdbus6'):
+        return False
+    qdbus_bin = shutil.which('qdbus') or shutil.which('qdbus6')
+
+    cmds = [
+        [qdbus_bin, 'org.kde.dolphin', '/dolphin/Dolphin_1', 'refresh'],
+        [qdbus_bin, 'org.kde.dolphin', '/dolphin/Dolphin_1', 'org.qtproject.Qt.QWidget.update'],
+    ]
+    for c in cmds:
+        try:
+            r = subprocess.run(c, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=1)
+            if r.returncode == 0:
+                return True
+        except Exception:
+            pass
+    return False
 
 def get_git_status(path):
     if not os.path.isdir(os.path.join(path, '.git')):
@@ -174,6 +203,10 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
             pass
     if not quiet:
         out(f"Total: {processed} repos")
+    # Tenta refresh Dolphin (best-effort)
+    refreshed = refresh_dolphin(quiet=True)
+    if not quiet and refreshed:
+        out("Dolphin refresh solicitado")
 
 if __name__ == "__main__":
     args = []
