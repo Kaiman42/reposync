@@ -17,7 +17,7 @@ icons = {
     'modified': 'folder-orange',
     'untracked': 'folder-red',
     'synced': 'folder-green',
-    'pending_sync': 'folder-purple'
+    'pending_sync': 'folder-violet'
 }
 
 def repo_synced(path, fetch=False):
