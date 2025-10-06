@@ -72,12 +72,15 @@ def watcher_loop(paths):
                 break
             if not line.strip():
                 continue
+            print(f"DEBUG: inotify line: {line.strip()}", flush=True)
             parts = line.split(None, 3)
             if parts:
                 repo = repo_root(parts[0])
+                print(f"DEBUG: repo found: {repo}", flush=True)
                 if repo:
                     with lock:
                         pending.add(repo)
+                        print(f"DEBUG: added to pending: {repo}", flush=True)
     except KeyboardInterrupt:
         proc.terminate()
         return

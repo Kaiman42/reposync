@@ -166,3 +166,6 @@ O script já de-duplifica múltiplos arquivos do mesmo repositório no mesmo dis
 - Git
 - Dolphin (para visualizar os ícones)
 # test change
+test auto change
+auto test seg 06 out 2025 16:22:58 -03
+test inotify seg 06 out 2025 16:23:48 -03
