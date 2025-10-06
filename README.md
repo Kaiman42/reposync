@@ -14,14 +14,13 @@ Execute o script `reposync.py` para atualizar os ícones das pastas baseados no 
 
 - **not_init**: Pasta não é um repositório Git. Ícone: `folder-black`.
 - **clean**: Repositório inicializado, sem mudanças pendentes. Ícone: `folder-green`.
-- **staged**: Há arquivos staged para commit. Ícone: `folder-yellow`.
-- **modified**: Há mudanças não staged. Ícone: `folder-orange`.
+- **commit**: Há arquivos para commit (staged ou modificados). Ícone: `folder-yellow`.
 - **untracked**: Há arquivos não rastreados. Ícone: `folder-red`.
- - **synced**: Repositório sincronizado com remoto (sem ahead/behind e limpo). Ícone: `folder-green`.
- - **pending_sync**: Repositório com divergência (ahead/behind) ou mudanças locais. Ícone: `folder-violet`.
+- **synced**: Repositório sincronizado com remoto (sem ahead/behind e limpo). Ícone: `folder-green`.
+- **pending_sync**: Repositório com divergência (ahead/behind) ou mudanças locais. Ícone: `folder-violet`.
 
 Modo de sincronização opcional:
-Execute com `--sync-mode` para usar somente `synced` (verde) e `pending_sync` (roxo) ignorando os demais detalhamentos internos. Use `--fetch-remotes` junto se quiser atualizar referências remotas antes de classificar.
+Execute com `--sync-mode` para usar somente `synced` (verde) e `pending_sync` (violeta) ignorando os demais detalhamentos internos. Use `--fetch-remotes` junto se quiser atualizar referências remotas antes de classificar.
 
 Exemplos:
 ```bash

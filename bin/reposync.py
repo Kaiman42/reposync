@@ -13,8 +13,7 @@ base_paths = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
 icons = {
     'not_init': 'folder-black',
     'clean': 'folder-green',
-    'staged': 'folder-yellow',
-    'modified': 'folder-orange',
+    'commit': 'folder-yellow',
     'untracked': 'folder-red',
     'synced': 'folder-green',
     'pending_sync': 'folder-violet'
@@ -117,10 +116,8 @@ def get_git_status(path):
         has_staged = any(line.startswith(('A ', 'M ', 'D ', 'R ')) for line in lines)
         has_modified = any(line.startswith((' M', 'MM', 'AM', 'RM')) for line in lines)
         has_untracked = any(line.startswith('?? ') for line in lines)
-        if has_staged and not has_modified:
-            return 'staged'
-        elif has_modified:
-            return 'modified'
+        if has_staged or has_modified:
+            return 'commit'
         elif has_untracked:
             return 'untracked'
         else:
