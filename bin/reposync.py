@@ -11,12 +11,35 @@ base_paths = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
 
 # Ícones (usando ícones padrão do sistema; ajuste se necessário)
 icons = {
-    'not_init': 'folder-red',
+    'not_init': 'folder-black',
     'clean': 'folder-green',
     'staged': 'folder-yellow',
     'modified': 'folder-orange',
-    'untracked': 'folder-purple'
+    'untracked': 'folder-red',
+    'synced': 'folder-green',
+    'pending_sync': 'folder-purple'
 }
+
+def repo_synced(path, fetch=False):
+    if not os.path.isdir(os.path.join(path, '.git')):
+        return False, False  # not repo
+    try:
+        if fetch:
+            subprocess.run(['git','fetch','--quiet'], cwd=path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
+        r = subprocess.run(['git','status','-sb'], cwd=path, capture_output=True, text=True, timeout=10)
+        if r.returncode != 0:
+            return False, True
+        first = r.stdout.splitlines()[0] if r.stdout else ''
+        ahead = 'ahead ' in first
+        behind = 'behind ' in first
+        diverged = ('ahead ' in first and 'behind ' in first) or 'diverged' in first
+        wt = subprocess.run(['git','status','--porcelain'], cwd=path, capture_output=True, text=True, timeout=10)
+        dirty = bool(wt.stdout.strip())
+        if not ahead and not behind and not diverged and not dirty:
+            return True, True
+        return False, True
+    except Exception:
+        return False, True
 
 def refresh_dolphin(quiet: bool=True):
     """Tenta forçar o Dolphin a recarregar ícones."""
@@ -159,7 +182,7 @@ def ensure_hooks(repo: str, force: bool=False, quiet: bool=True):
             return False
     return False
 
-def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
+def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False, sync_mode=False, fetch_remotes=False):
     processed = 0
     changed_summary = {k:0 for k in icons.keys()}
     processed_paths = []
@@ -177,10 +200,15 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False):
             updated = ensure_hooks(repo, force=force_hooks, quiet=quiet)
             if updated and not quiet:
                 out(f"[hooks] atualizado em {repo}")
-        status = get_git_status(repo)
+        if sync_mode:
+            synced, valid = repo_synced(repo, fetch=fetch_remotes)
+            status = 'synced' if synced else 'pending_sync'
+        else:
+            status = get_git_status(repo)
         update_directory_icon(repo, status)
         changed_summary[status] = changed_summary.get(status,0)+1
-        out(f"{repo}: {status}")
+        if not quiet:
+            out(f"{repo}: {status}")
         processed += 1
         processed_paths.append(repo)
     if log:
@@ -206,6 +234,8 @@ if __name__ == "__main__":
     log = False
     ensure = False
     force_hooks = False
+    sync_mode = False
+    fetch_remotes = False
     for a in sys.argv[1:]:
         if a in ("-q", "--quiet"):
             quiet = True
@@ -215,6 +245,10 @@ if __name__ == "__main__":
             ensure = True
         elif a in ("-F", "--force-hooks"):
             force_hooks = True
+        elif a in ("-s", "--sync-mode"):
+            sync_mode = True
+        elif a in ("-fR", "--fetch-remotes"):
+            fetch_remotes = True
         else:
             args.append(a)
-    main(args if args else None, quiet=quiet, log=log, ensure=ensure, force_hooks=force_hooks)
+    main(args if args else None, quiet=quiet, log=log, ensure=ensure, force_hooks=force_hooks, sync_mode=sync_mode, fetch_remotes=fetch_remotes)
