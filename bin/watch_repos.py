@@ -1,17 +1,4 @@
 #!/usr/bin/env python3
-"""Watch repos for file changes and trigger reposync incrementally.
-
-Requer: inotify-tools (inotifywait no PATH).
-
-Uso:
-  ./watch_repos.py            # observa caminhos padrão (base_paths do reposync)
-  ./watch_repos.py /caminho/extra
-
-Env vars:
-  DEBOUNCE_MS=400  (janela de agregação por repo)
-
-Saída: logs simples no stdout.
-"""
 import os
 import sys
 import time
@@ -20,13 +7,8 @@ import threading
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPOSYNC = os.path.join(SCRIPT_DIR, 'reposync.py')
-
 DEFAULT_BASES = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
-
 DEBOUNCE_MS = int(os.environ.get('DEBOUNCE_MS', '2000'))
-
-def log(msg):
-    print(msg, flush=True)
 
 def find_repos(bases):
     repos = []
@@ -43,20 +25,18 @@ def find_repos(bases):
 
 def repo_root(path):
     path = os.path.abspath(path)
-    cur = path
     while True:
-        if os.path.isdir(os.path.join(cur, '.git')):
-            return cur
-        parent = os.path.dirname(cur)
-        if parent == cur:
+        if os.path.isdir(os.path.join(path, '.git')):
+            return path
+        parent = os.path.dirname(path)
+        if parent == path:
             return None
-        cur = parent
+        path = parent
 
 def run_reposync(repo):
     subprocess.run([REPOSYNC, repo, '--ensure-hooks', '-q'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def watcher_loop(paths):
-    # Monta comando inotifywait recursivo para os paths
     cmd = ['inotifywait', '-m', '-r', '-e', 'modify,attrib,close_write,create,delete,move'] + paths
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1)
@@ -80,37 +60,36 @@ def watcher_loop(paths):
                         last_run[repo] = now
                 pending.clear()
             for r in to_run:
-                log(f"reposync {r}")
+                print(f"reposync {r}", flush=True)
                 run_reposync(r)
 
     threading.Thread(target=debounce_thread, daemon=True).start()
 
-    stream = proc.stdout
-    if stream is None:
-        print('stdout do inotifywait não disponível', file=sys.stderr)
+    try:
+        while True:
+            line = proc.stdout.readline()
+            if not line:
+                break
+            if not line.strip():
+                continue
+            parts = line.split(None, 3)
+            if parts:
+                repo = repo_root(parts[0])
+                if repo:
+                    with lock:
+                        pending.add(repo)
+    except KeyboardInterrupt:
+        proc.terminate()
         return
-    for line in stream:
-        line = line.strip()
-        if not line:
-            continue
-        parts = line.split(None, 3)
-        base = parts[0]
-        full_path = base
-        repo = repo_root(full_path)
-        if not repo:
-            continue
-        with lock:
-            pending.add(repo)
 
 def main(argv):
     bases = argv if argv else DEFAULT_BASES
     repos = find_repos(bases)
-    paths = repos  # observar somente root de cada repo
-    if not paths:
+    if not repos:
         print('Nenhum repositório encontrado.', file=sys.stderr)
         return 1
-    print(f'Observando {len(paths)} repositórios. Debounce {DEBOUNCE_MS}ms.')
-    watcher_loop(paths)
+    print(f'Observando {len(repos)} repositórios. Debounce {DEBOUNCE_MS}ms.')
+    watcher_loop(repos)
     return 0
 
 if __name__ == '__main__':

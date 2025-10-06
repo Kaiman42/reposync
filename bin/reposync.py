@@ -4,17 +4,17 @@ import subprocess
 import sys
 import shutil
 from datetime import datetime
+
 HOOK_VERSION = "0.0.0"
+BASE_PATHS = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
+DEFAULT_TIMEOUT = 15
+FETCH_TIMEOUT = 60
 
-# Caminhos base
-base_paths = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
-
-# Ícones (usando ícones padrão do sistema; ajuste se necessário)
-icons = {
+ICONS = {
     'not_init': 'folder-black',
-    'clean': 'folder-green',
     'commit': 'folder-yellow',
     'untracked': 'folder-red',
+    'no_remote': 'folder-orange',
     'synced': 'folder-green',
     'pending_sync': 'folder-violet'
 }
@@ -24,39 +24,44 @@ def repo_synced(path, fetch=False):
         return False, False
     try:
         if fetch:
-            subprocess.run(['git','fetch','--quiet','--prune'], cwd=path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
-        wt = subprocess.run(['git','status','--porcelain'], cwd=path, capture_output=True, text=True, timeout=15)
+            subprocess.run(['git','fetch','--quiet','--prune'], cwd=path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=FETCH_TIMEOUT)
+        
+        wt = subprocess.run(['git','status','--porcelain'], cwd=path, capture_output=True, text=True, timeout=DEFAULT_TIMEOUT)
         dirty = bool(wt.stdout.strip())
+        
         up = subprocess.run(['git','rev-parse','--abbrev-ref','--symbolic-full-name','@{u}'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=5)
+        
         if up.returncode != 0:
-            # sem upstream: considerar pendente se dirty ou há commits locais em relação a origin/HEAD tentativo
             base_guess = subprocess.run(['git','remote','show'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=5)
             if base_guess.returncode == 0 and base_guess.stdout.strip():
                 remote = base_guess.stdout.strip().splitlines()[0]
-                # tenta origin/main, origin/master
                 for branch in ('main','master'):
-                    probe = subprocess.run(['git','rev-parse',f'{remote}/{branch}'], cwd=path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    if probe.returncode == 0:
-                        ahead_probe = subprocess.run(['git','rev-list','--left-right','--count',f'HEAD...{remote}/{branch}'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-                        if ahead_probe.returncode == 0:
-                            parts = ahead_probe.stdout.strip().split()
-                            ahead_cnt = int(parts[0]) if parts else 0
-                            behind_cnt = int(parts[1]) if len(parts)>1 else 0
-                            if ahead_cnt==0 and behind_cnt==0 and not dirty:
-                                return True, True
-                            return False, True
+                    if _check_branch_sync(path, remote, branch, dirty):
+                        return True, True
+            else:
+                # Sem remote: considerar como no_remote (pendência)
+                return False, False  # Retorna False, False para indicar no_remote
             return False, True
-        # tem upstream definido
-        # commits locais não enviados
+        
         ahead_list = subprocess.run(['git','rev-list','@{u}..HEAD','--count'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10)
         behind_list = subprocess.run(['git','rev-list','HEAD..@{u}','--count'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10)
         ahead_cnt = int(ahead_list.stdout.strip() or '0') if ahead_list.returncode==0 else 0
         behind_cnt = int(behind_list.stdout.strip() or '0') if behind_list.returncode==0 else 0
-        if ahead_cnt==0 and behind_cnt==0 and not dirty:
-            return True, True
-        return False, True
+        
+        return (ahead_cnt==0 and behind_cnt==0 and not dirty), True
     except Exception:
         return False, True
+
+def _check_branch_sync(path, remote, branch, dirty):
+    probe = subprocess.run(['git','rev-parse',f'{remote}/{branch}'], cwd=path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if probe.returncode == 0:
+        ahead_probe = subprocess.run(['git','rev-list','--left-right','--count',f'HEAD...{remote}/{branch}'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        if ahead_probe.returncode == 0:
+            parts = ahead_probe.stdout.strip().split()
+            ahead_cnt = int(parts[0]) if parts else 0
+            behind_cnt = int(parts[1]) if len(parts)>1 else 0
+            return ahead_cnt==0 and behind_cnt==0 and not dirty
+    return False
 
 def refresh_dolphin(quiet: bool=True):
     """Tenta forçar o Dolphin a recarregar ícones."""
@@ -104,38 +109,30 @@ def get_git_status(path):
     if not os.path.isdir(os.path.join(path, '.git')):
         return 'not_init'
     try:
-        result = subprocess.run(['git', 'status', '--porcelain'], cwd=path, capture_output=True, text=True)
+        result = subprocess.run(['git', 'status', '--porcelain'], cwd=path, capture_output=True, text=True, timeout=DEFAULT_TIMEOUT)
         if result.returncode != 0:
-            return 'not_init'  # erro, talvez não repo
-        status = result.stdout.strip()
-        if not status:
-            return 'clean'
-        lines = status.split('\n')
-        # IGNORE_MARKERS: remover .directory de considerações
-        lines = [l for l in lines if l.strip() != '?? .directory']
-        has_staged = any(line.startswith(('A ', 'M ', 'D ', 'R ')) for line in lines)
-        has_modified = any(line.startswith((' M', 'MM', 'AM', 'RM')) for line in lines)
+            return 'not_init'
+        
+        lines = [l for l in result.stdout.strip().split('\n') if l.strip() and l.strip() != '?? .directory']
+        if not lines:
+            return None
+        
+        has_commit = any(line.startswith(('A ', 'M ', 'D ', 'R ', ' M', 'MM', 'AM', 'RM')) for line in lines)
         has_untracked = any(line.startswith('?? ') for line in lines)
-        if has_staged or has_modified:
-            return 'commit'
-        elif has_untracked:
-            return 'untracked'
-        else:
-            return 'clean'
-    except Exception as e:
+        
+        return 'commit' if has_commit else ('untracked' if has_untracked else None)
+    except Exception:
         return 'not_init'
 
 def update_directory_icon(path, status):
     directory_file = os.path.join(path, '.directory')
-    icon = icons.get(status, 'folder')
-    content = f"""[Desktop Entry]
-Icon={icon}
-"""
+    icon = ICONS.get(status, 'folder')
+    content = f"[Desktop Entry]\nIcon={icon}\n"
+    
     with open(directory_file, 'w') as f:
         f.write(content)
-    # Toca mtime da pasta e do pai para ajudar o Dolphin a perceber mudança
+    
     try:
-        now = None  # usa tempo atual
         os.utime(path, None)
         parent = os.path.dirname(path.rstrip('/'))
         if parent and os.path.isdir(parent):
@@ -144,7 +141,6 @@ Icon={icon}
         pass
 
 def iter_repos_in(path):
-    """Itera repositórios diretos dentro de um caminho base."""
     if not os.path.isdir(path):
         return
     for name in os.listdir(path):
@@ -153,9 +149,6 @@ def iter_repos_in(path):
             yield fp
 
 def collect_targets(targets):
-    """Normaliza lista de caminhos passados por linha de comando/hook.
-    Se for repo, inclui; se for diretório base, inclui seus filhos repos.
-    """
     seen = set()
     for t in targets:
         t = os.path.abspath(t)
@@ -164,7 +157,6 @@ def collect_targets(targets):
                 seen.add(t)
                 yield t
         else:
-            # tratar como base
             for repo in iter_repos_in(t):
                 if repo not in seen:
                     seen.add(repo)
@@ -197,33 +189,30 @@ def ensure_hooks(repo: str, force: bool=False, quiet: bool=True):
             return False
     return False
 
-def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False, sync_mode=False, fetch_remotes=False):
+def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False, fetch_remotes=False):
     processed = 0
-    changed_summary = {k:0 for k in icons.keys()}
+    changed_summary = {k:0 for k in ICONS.keys()}
     processed_paths = []
-    def out(msg):
-        if not quiet:
-            print(msg)
-    if targets:
-        repos = list(collect_targets(targets))
-    else:
-        repos = []
-        for base in base_paths:
-            repos.extend(list(iter_repos_in(base)))
+    
+    repos = list(collect_targets(targets)) if targets else [repo for base in BASE_PATHS for repo in iter_repos_in(base)]
     for repo in repos:
-        if ensure:
-            updated = ensure_hooks(repo, force=force_hooks, quiet=quiet)
-            if updated and not quiet:
-                out(f"[hooks] atualizado em {repo}")
-        if sync_mode:
-            synced, valid = repo_synced(repo, fetch=fetch_remotes)
-            status = 'synced' if synced else 'pending_sync'
+        if ensure and ensure_hooks(repo, force=force_hooks, quiet=quiet) and not quiet:
+            print(f"[hooks] atualizado em {repo}")
+        
+        local_status = get_git_status(repo)
+        if local_status in ('commit', 'untracked'):
+            status = local_status
         else:
-            status = get_git_status(repo)
+            synced, valid = repo_synced(repo, fetch=fetch_remotes)
+            if not valid:
+                status = 'no_remote'
+            else:
+                status = 'synced' if synced else 'pending_sync'
+        
         update_directory_icon(repo, status)
         changed_summary[status] = changed_summary.get(status,0)+1
         if not quiet:
-            out(f"{repo}: {status}")
+            print(f"{repo}: {status}")
         processed += 1
         processed_paths.append(repo)
     if log:
@@ -236,11 +225,9 @@ def main(targets=None, quiet=False, log=False, ensure=False, force_hooks=False, 
         except Exception:
             pass
     if not quiet:
-        out(f"Total: {processed} repos")
-    # Primeiro tenta notificar via KDirNotify
-    notified = kdir_notify(processed_paths, quiet=True)
-    if not notified:
-        # Fallback para método anterior
+        print(f"Total: {processed} repos")
+    
+    if not kdir_notify(processed_paths, quiet=True):
         refresh_dolphin(quiet=True)
 
 if __name__ == "__main__":
@@ -249,7 +236,6 @@ if __name__ == "__main__":
     log = False
     ensure = False
     force_hooks = False
-    sync_mode = False
     fetch_remotes = False
     for a in sys.argv[1:]:
         if a in ("-q", "--quiet"):
@@ -260,10 +246,8 @@ if __name__ == "__main__":
             ensure = True
         elif a in ("-F", "--force-hooks"):
             force_hooks = True
-        elif a in ("-s", "--sync-mode"):
-            sync_mode = True
         elif a in ("-fR", "--fetch-remotes"):
             fetch_remotes = True
         else:
             args.append(a)
-    main(args if args else None, quiet=quiet, log=log, ensure=ensure, force_hooks=force_hooks, sync_mode=sync_mode, fetch_remotes=fetch_remotes)
+    main(args if args else None, quiet=quiet, log=log, ensure=ensure, force_hooks=force_hooks, fetch_remotes=fetch_remotes)
