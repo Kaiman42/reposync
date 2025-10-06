@@ -53,7 +53,7 @@ def repo_root(path):
         cur = parent
 
 def run_reposync(repo):
-    subprocess.run([REPOSYNC, repo, '--ensure-hooks', '-q'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run([REPOSYNC, repo, '--ensure-hooks', '--sync-mode', '-q'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def watcher_loop(paths):
     # Monta comando inotifywait recursivo para os paths

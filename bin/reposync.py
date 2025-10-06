@@ -30,15 +30,30 @@ def repo_synced(path, fetch=False):
         dirty = bool(wt.stdout.strip())
         up = subprocess.run(['git','rev-parse','--abbrev-ref','--symbolic-full-name','@{u}'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=5)
         if up.returncode != 0:
-            # Sem upstream configurado: considerar pendente se houver dirty, senão tratar como synced provisório
-            return (not dirty), True
-        cmp = subprocess.run(['git','rev-list','--left-right','--count','HEAD...@{u}'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10)
-        if cmp.returncode != 0:
+            # sem upstream: considerar pendente se dirty ou há commits locais em relação a origin/HEAD tentativo
+            base_guess = subprocess.run(['git','remote','show'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=5)
+            if base_guess.returncode == 0 and base_guess.stdout.strip():
+                remote = base_guess.stdout.strip().splitlines()[0]
+                # tenta origin/main, origin/master
+                for branch in ('main','master'):
+                    probe = subprocess.run(['git','rev-parse',f'{remote}/{branch}'], cwd=path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    if probe.returncode == 0:
+                        ahead_probe = subprocess.run(['git','rev-list','--left-right','--count',f'HEAD...{remote}/{branch}'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                        if ahead_probe.returncode == 0:
+                            parts = ahead_probe.stdout.strip().split()
+                            ahead_cnt = int(parts[0]) if parts else 0
+                            behind_cnt = int(parts[1]) if len(parts)>1 else 0
+                            if ahead_cnt==0 and behind_cnt==0 and not dirty:
+                                return True, True
+                            return False, True
             return False, True
-        parts = cmp.stdout.strip().split()
-        ahead_cnt = int(parts[0]) if parts else 0
-        behind_cnt = int(parts[1]) if len(parts) > 1 else 0
-        if ahead_cnt == 0 and behind_cnt == 0 and not dirty:
+        # tem upstream definido
+        # commits locais não enviados
+        ahead_list = subprocess.run(['git','rev-list','@{u}..HEAD','--count'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10)
+        behind_list = subprocess.run(['git','rev-list','HEAD..@{u}','--count'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10)
+        ahead_cnt = int(ahead_list.stdout.strip() or '0') if ahead_list.returncode==0 else 0
+        behind_cnt = int(behind_list.stdout.strip() or '0') if behind_list.returncode==0 else 0
+        if ahead_cnt==0 and behind_cnt==0 and not dirty:
             return True, True
         return False, True
     except Exception:
