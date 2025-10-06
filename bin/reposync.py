@@ -22,20 +22,23 @@ icons = {
 
 def repo_synced(path, fetch=False):
     if not os.path.isdir(os.path.join(path, '.git')):
-        return False, False  # not repo
+        return False, False
     try:
         if fetch:
-            subprocess.run(['git','fetch','--quiet'], cwd=path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
-        r = subprocess.run(['git','status','-sb'], cwd=path, capture_output=True, text=True, timeout=10)
-        if r.returncode != 0:
-            return False, True
-        first = r.stdout.splitlines()[0] if r.stdout else ''
-        ahead = 'ahead ' in first
-        behind = 'behind ' in first
-        diverged = ('ahead ' in first and 'behind ' in first) or 'diverged' in first
-        wt = subprocess.run(['git','status','--porcelain'], cwd=path, capture_output=True, text=True, timeout=10)
+            subprocess.run(['git','fetch','--quiet','--prune'], cwd=path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=60)
+        wt = subprocess.run(['git','status','--porcelain'], cwd=path, capture_output=True, text=True, timeout=15)
         dirty = bool(wt.stdout.strip())
-        if not ahead and not behind and not diverged and not dirty:
+        up = subprocess.run(['git','rev-parse','--abbrev-ref','--symbolic-full-name','@{u}'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=5)
+        if up.returncode != 0:
+            # Sem upstream configurado: considerar pendente se houver dirty, senão tratar como synced provisório
+            return (not dirty), True
+        cmp = subprocess.run(['git','rev-list','--left-right','--count','HEAD...@{u}'], cwd=path, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=10)
+        if cmp.returncode != 0:
+            return False, True
+        parts = cmp.stdout.strip().split()
+        ahead_cnt = int(parts[0]) if parts else 0
+        behind_cnt = int(parts[1]) if len(parts) > 1 else 0
+        if ahead_cnt == 0 and behind_cnt == 0 and not dirty:
             return True, True
         return False, True
     except Exception:
