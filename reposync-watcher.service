@@ -1,14 +1,20 @@
 [Unit]
 Description=RepoSync Watcher (inotify)
+# Pode ser instalado como serviço de usuário (systemd --user) ou system-wide.
 After=graphical-session.target
 
 [Service]
 Type=simple
 Environment=DEBOUNCE_MS=500
-WorkingDirectory=%h/Repos/Meus/reposync/bin
-ExecStart=%h/Repos/Meus/reposync/bin/watch_repos.py
-Restart=on-failure
-RestartSec=2
+# Trabalha no diretório do projeto (expande %h para $HOME)
+WorkingDirectory=%h/Repos/Meus/reposync
+# Use o interpretador explicitamente para evitar dependência apenas do bit de execução
+ExecStart=/usr/bin/env python3 %h/Repos/Meus/reposync/bin/watch_repos.py
+# Reinicia sempre que o processo terminar, para manter em execução contínua
+Restart=always
+RestartSec=5
 
 [Install]
+# Para um serviço de usuário, habilite com: `systemctl --user enable reposync-watcher.service`
+# Isso criará a ligação em `~/.config/systemd/user/default.target.wants/`.
 WantedBy=default.target
