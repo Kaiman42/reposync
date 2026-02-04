@@ -9,8 +9,7 @@ print_usage() {
 Usage: rs.sh <command> [options]
 
 Commands:
-  install      Install service (default: user if non-root, system if root)
-  setup        Install dependencies (inotify-tools) AND install service
+  setup        Install dependencies (inotify-tools) AND install service (configure, enable, start)
   uninstall    Uninstall service
   status       Show service status
   enable       Enable the service
@@ -23,11 +22,10 @@ Options:
   --system     Operate on the system unit (/etc/systemd/system) (requires root)
 
 Examples:
-  ./rs.sh install --user
   ./rs.sh setup
-  sudo ./rs.sh install --system
+  sudo ./rs.sh setup --system
   ./rs.sh status --user
-  ./rs.sh restart --system
+  ./rs.sh restart
 USAGE
 }
 
@@ -114,7 +112,7 @@ install_service() {
 
     if [ "$MODE" = "system" ]; then
         if [ "$(id -u)" -ne 0 ]; then
-            echo "System install requires root. Run: sudo $0 install --system"
+            echo "System install requires root. Run: sudo $0 setup --system"
             exit 1
         fi
         
@@ -284,9 +282,6 @@ stop_service() {
 
 # Main dispatch
 case "$CMD" in
-    install)
-        install_service
-        ;;
     setup)
         install_dependencies
         install_service

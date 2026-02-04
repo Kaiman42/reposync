@@ -5,12 +5,12 @@ import time
 import subprocess
 import threading
 import shutil
+from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPOSYNC = os.path.join(SCRIPT_DIR, 'reposync.py')
 DEFAULT_BASES = ['/home/kaiman/Repos/Github/Meus', '/home/kaiman/Repos/Github/Terceiros']
 DEBOUNCE_MS = int(os.environ.get('DEBOUNCE_MS', '2000'))
-NOTIFICATION_INTERVAL_HOURS = 12  # Notificar a cada 12 horas
 
 def find_repos(bases):
     repos = []
@@ -35,22 +35,50 @@ def repo_root(path):
             return None
         path = parent
 
-def count_pending_commits(repo):
-    """Conta commits não sincronizados (ahead do remote)."""
+def get_detailed_status(repo):
+    """
+    Retorna o status detalhado do repositório:
+    - 'clean': tudo sincronizado
+    - 'commit': possui alterações não commitadas
+    - 'sync': possui commits locais não enviados (ahead)
+    - 'both': possui alterações não commitadas E commits não enviados
+    """
+    dirty = False
     try:
-        # Tenta obter o upstream branch
-        result = subprocess.run(
-            ['git', 'rev-list', '@{u}..HEAD', '--count'],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            timeout=5
-        )
-        if result.returncode == 0:
-            return int(result.stdout.strip() or '0')
+        # Verifica se há alterações (porcelain retorna output se houver)
+        res = subprocess.run(['git', 'status', '--porcelain'], cwd=repo, capture_output=True, text=True, timeout=5)
+        if res.returncode == 0 and res.stdout.strip():
+            dirty = True
     except Exception:
         pass
-    return 0
+
+    sync_needed = False
+    try:
+        # Verifica se há commits ahead ou behind do upstream
+        # Primeiro verifica se tem upstream configurado
+        subprocess.run(['git', 'rev-parse', '@{u}'], cwd=repo, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
+        
+        # Check Ahead
+        res_ahead = subprocess.run(['git', 'rev-list', '@{u}..HEAD', '--count'], cwd=repo, capture_output=True, text=True, timeout=5)
+        if res_ahead.returncode == 0 and int(res_ahead.stdout.strip() or '0') > 0:
+            sync_needed = True
+        
+        # Check Behind (se ainda não marcou como sync_needed)
+        if not sync_needed:
+            res_behind = subprocess.run(['git', 'rev-list', 'HEAD..@{u}', '--count'], cwd=repo, capture_output=True, text=True, timeout=5)
+            if res_behind.returncode == 0 and int(res_behind.stdout.strip() or '0') > 0:
+                sync_needed = True
+
+    except Exception:
+        pass
+
+    if dirty and sync_needed:
+        return 'both'
+    elif dirty:
+        return 'commit'
+    elif sync_needed:
+        return 'sync'
+    return 'clean'
 
 def send_notification(title, message, timeout=5000):
     """Envia notificação desktop via notify-send."""
@@ -58,44 +86,65 @@ def send_notification(title, message, timeout=5000):
     if not notify_send:
         return False
     try:
+        # Configura a variável DISPLAY e DBUS_SESSION_BUS_ADDRESS se necessário (para cron/background)
+        env = os.environ.copy()
         subprocess.run(
             [notify_send, '-t', str(timeout), title, message],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            timeout=2
+            timeout=5,
+            env=env
         )
         return True
     except Exception:
         return False
 
-def check_and_notify_pending_commits(repos):
-    """Verifica todos os repos e envia notificação consolidada de commits pendentes."""
-    pending_repos = {}
-    total_commits = 0
+def check_and_notify_daily(repos):
+    """Verifica todos os repositórios e envia relatório diário consolidado."""
+    stats = {'commit': [], 'sync': [], 'both': []}
     
+    print("[Daily Check] Iniciando verificação diária...", flush=True)
     for repo in repos:
-        pending = count_pending_commits(repo)
-        if pending > 0:
-            repo_name = os.path.basename(repo)
-            pending_repos[repo_name] = pending
-            total_commits += pending
+        status = get_detailed_status(repo)
+        repo_name = os.path.basename(repo)
+        if status != 'clean':
+            stats[status].append(repo_name)
     
-    if pending_repos:
-        # Cria mensagem consolidada
-        repo_list = "\n".join([f"  • {name}: {count}" for name, count in pending_repos.items()])
-        message = f"Total: {total_commits} commit{'s' if total_commits != 1 else ''} aguardando sync\n\n{repo_list}"
-        send_notification("RepoSync - Notificação Periódica", message, timeout=10000)
-        print(f"[Notificação] {total_commits} commits aguardando sync em {len(pending_repos)} repositório(s)", flush=True)
+    total_issues = len(stats['commit']) + len(stats['sync']) + len(stats['both'])
+    
+    if total_issues > 0:
+        lines = []
+        if stats['both']:
+            lines.append(f"• {len(stats['both'])} requerem Commit & Sync")
+        if stats['commit']:
+            lines.append(f"• {len(stats['commit'])} requerem Commit")
+        if stats['sync']:
+            lines.append(f"• {len(stats['sync'])} requerem Sync")
+            
+        summary_text = "\n".join(lines)
+        
+        # Detalhes (limitar a alguns se houver muitos, ou mostrar todos)
+        details = []
+        if stats['both']:
+            details.append("Commit & Sync: " + ", ".join(stats['both'][:5]) + ("..." if len(stats['both']) > 5 else ""))
+        if stats['commit']:
+            details.append("Commit: " + ", ".join(stats['commit'][:5]) + ("..." if len(stats['commit']) > 5 else ""))
+        if stats['sync']:
+            details.append("Sync: " + ", ".join(stats['sync'][:5]) + ("..." if len(stats['sync']) > 5 else ""))
+            
+        body = f"{summary_text}\n\n{chr(10).join(details)}"
+        
+        # 600000ms = 10 minutos
+        send_notification("RepoSync: Relatório Diário", body, timeout=600000)
+        print(f"[Daily Check] Notificação enviada. {total_issues} repositórios pendentes.", flush=True)
+    else:
+        print("[Daily Check] Tudo limpo. Nenhuma notificação necessária.", flush=True)
 
 def run_reposync(repo):
+    # Roda o reposync para atualizar ícones/hooks, mas SEM notificação
     subprocess.run([REPOSYNC, repo, '--ensure-hooks', '-q'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
-    # Verifica se há commits pendentes e notifica
-    pending_commits = count_pending_commits(repo)
-    if pending_commits > 0:
-        repo_name = os.path.basename(repo)
-        msg = f"{pending_commits} commit{'s' if pending_commits != 1 else ''} aguardando sync"
-        send_notification(f"RepoSync: {repo_name}", msg)
+    # Notificação removida conforme solicitado
+    # O feedback visual ficará por conta dos ícones e da notificação diária
 
 def watcher_loop(paths, repos):
     cmd = ['inotifywait', '-m', '-r', '-e', 'modify,attrib,close_write,create,delete,move'] + paths
@@ -107,28 +156,36 @@ def watcher_loop(paths, repos):
 
     pending = set()
     last_run = {}
-    last_notification = time.time()  # Rastreia última notificação periódica
     lock = threading.Lock()
+    
+    # Rastreamento para notificação diária
+    # Se o script iniciar após as 22h, ele notificará no dia seguinte, a menos que forcemos check na startup?
+    # Melhor seguir estritamente o horário.
+    last_daily_notification_date = None
 
     def debounce_thread():
-        nonlocal last_notification
+        nonlocal last_daily_notification_date
         while True:
-            time.sleep(0.2)
-            now = time.time()
+            time.sleep(0.5)
+            now = datetime.now()
+            
+            # Lógica de notificação diária: Executar uma vez por dia por volta das 22h
+            if now.hour == 22:
+                today = now.date()
+                if last_daily_notification_date != today:
+                    check_and_notify_daily(repos)
+                    last_daily_notification_date = today
+            
+            # Lógica de debounce para reposync (atualização de ícones)
             to_run = []
-            
-            # Verifica se é hora de enviar notificação periódica (12 horas)
-            if now - last_notification >= NOTIFICATION_INTERVAL_HOURS * 3600:
-                print(f"[Notificação periódica] Verificando commits pendentes...", flush=True)
-                check_and_notify_pending_commits(repos)
-                last_notification = now
-            
+            now_ts = time.time()
             with lock:
                 for repo in list(pending):
-                    if repo not in last_run or now - last_run.get(repo, 0) >= DEBOUNCE_MS / 1000.0:
+                    if repo not in last_run or now_ts - last_run.get(repo, 0) >= DEBOUNCE_MS / 1000.0:
                         to_run.append(repo)
-                        last_run[repo] = now
+                        last_run[repo] = now_ts
                 pending.clear()
+            
             for r in to_run:
                 print(f"reposync {r}", flush=True)
                 run_reposync(r)
@@ -142,15 +199,13 @@ def watcher_loop(paths, repos):
                 break
             if not line.strip():
                 continue
-            print(f"DEBUG: inotify line: {line.strip()}", flush=True)
+            # print(f"DEBUG: inotify line: {line.strip()}", flush=True)
             parts = line.split(None, 3)
             if parts:
                 repo = repo_root(parts[0])
-                print(f"DEBUG: repo found: {repo}", flush=True)
                 if repo:
                     with lock:
                         pending.add(repo)
-                        print(f"DEBUG: added to pending: {repo}", flush=True)
     except KeyboardInterrupt:
         proc.terminate()
         return
@@ -161,7 +216,7 @@ def main(argv):
     if not repos:
         print('Nenhum repositório encontrado.', file=sys.stderr)
         return 1
-    print(f'Observando {len(repos)} repositórios. Debounce {DEBOUNCE_MS}ms. Notificação a cada {NOTIFICATION_INTERVAL_HOURS}h.')
+    print(f'Observando {len(repos)} repositórios. Debounce {DEBOUNCE_MS}ms. Notificação diária às 22h.')
     watcher_loop(repos, repos)
     return 0
 
