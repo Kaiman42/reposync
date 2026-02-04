@@ -8,7 +8,7 @@ import shutil
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPOSYNC = os.path.join(SCRIPT_DIR, 'reposync.py')
-DEFAULT_BASES = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
+DEFAULT_BASES = ['/home/kaiman/Repos/Github/Meus', '/home/kaiman/Repos/Github/Terceiros']
 DEBOUNCE_MS = int(os.environ.get('DEBOUNCE_MS', '2000'))
 NOTIFICATION_INTERVAL_HOURS = 12  # Notificar a cada 12 horas
 

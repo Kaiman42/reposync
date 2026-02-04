@@ -6,7 +6,7 @@ import shutil
 from datetime import datetime
 
 HOOK_VERSION = "0.0.0"
-BASE_PATHS = ['/home/kaiman/Repos/Meus', '/home/kaiman/Repos/Terceiros']
+BASE_PATHS = ['/home/kaiman/Repos/Github/Meus', '/home/kaiman/Repos/Github/Terceiros']
 DEFAULT_TIMEOUT = 15
 FETCH_TIMEOUT = 60
 

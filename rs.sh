@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_DIR="$(dirname "$(readlink -f "$0")")/.."
+REPO_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 service_name="reposync-watcher.service"
 
 print_usage() {
@@ -10,6 +10,7 @@ Usage: rs.sh <command> [options]
 
 Commands:
   install      Install service (default: user if non-root, system if root)
+  setup        Install dependencies (inotify-tools) AND install service
   uninstall    Uninstall service
   status       Show service status
   enable       Enable the service
@@ -23,6 +24,7 @@ Options:
 
 Examples:
   ./rs.sh install --user
+  ./rs.sh setup
   sudo ./rs.sh install --system
   ./rs.sh status --user
   ./rs.sh restart --system
@@ -62,6 +64,46 @@ run_user_systemctl() {
         su - "$SUDO_USER" -c "systemctl --user $*"
     else
         systemctl --user "$@"
+    fi
+}
+
+# Install dependencies
+install_dependencies() {
+    echo "Verificando dependências..."
+    if command -v inotifywait >/dev/null 2>&1; then
+        echo "Dependência 'inotify-tools' já instalada."
+        return 0
+    fi
+
+    echo "Tentando instalar 'inotify-tools'..."
+    if [ -x "$(command -v apt-get)" ]; then
+        if [ "$(id -u)" -ne 0 ]; then
+            sudo apt-get update && sudo apt-get install -y inotify-tools
+        else
+            apt-get update && apt-get install -y inotify-tools
+        fi
+    elif [ -x "$(command -v dnf)" ]; then
+        if [ "$(id -u)" -ne 0 ]; then
+            sudo dnf install -y inotify-tools
+        else
+            dnf install -y inotify-tools
+        fi
+    elif [ -x "$(command -v pacman)" ]; then
+        if [ "$(id -u)" -ne 0 ]; then
+            sudo pacman -S --needed --noconfirm inotify-tools
+        else
+            pacman -S --needed --noconfirm inotify-tools
+        fi
+    elif [ -x "$(command -v zypper)" ]; then
+        if [ "$(id -u)" -ne 0 ]; then
+            sudo zypper install -y inotify-tools
+        else
+            zypper install -y inotify-tools
+        fi
+    else
+        echo "ERRO: Gerenciador de pacotes não suportado ou não encontrado."
+        echo "Por favor, instale 'inotify-tools' manualmente."
+        exit 1
     fi
 }
 
@@ -243,6 +285,10 @@ stop_service() {
 # Main dispatch
 case "$CMD" in
     install)
+        install_service
+        ;;
+    setup)
+        install_dependencies
         install_service
         ;;
     uninstall)
