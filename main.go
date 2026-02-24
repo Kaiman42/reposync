@@ -1,0 +1,216 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+var (
+	basePaths = []string{}
+)
+
+func init() {
+	// Common patterns
+	possible := []string{
+		expandHome("~/Repos/Github/Meus"),
+		expandHome("~/Repos/Github/Terceiros"),
+		expandHome("~/Repos/Meus"),
+		expandHome("~/Repos/Terceiros"),
+		"D:\\Repos",
+		"D:\\Repos\\TERCEIROS",
+		"D:\\Repos\\Github\\Meus",
+		"D:\\Repos\\Github\\Terceiros",
+	}
+
+	for _, p := range possible {
+		if _, err := os.Stat(p); err == nil {
+			basePaths = append(basePaths, p)
+		}
+	}
+}
+
+func expandHome(path string) string {
+	if strings.HasPrefix(path, "~") {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, path[1:])
+	}
+	return path
+}
+
+func getGitStatus(repoPath string) string {
+	if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
+		return "not_init"
+	}
+
+	// git status --porcelain
+	cmd := exec.Command("git", "status", "--porcelain")
+	cmd.Dir = repoPath
+	output, err := cmd.Output()
+	if err != nil {
+		return "not_init"
+	}
+
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	var hasCommit, hasUntracked bool
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.Contains(line, ".directory") || strings.Contains(line, "desktop.ini") {
+			continue
+		}
+		if strings.HasPrefix(line, "??") {
+			hasUntracked = true
+		} else {
+			hasCommit = true
+		}
+	}
+
+	if hasCommit {
+		return "commit"
+	}
+	if hasUntracked {
+		return "untracked"
+	}
+
+	// Check for sync status (ahead/behind)
+	if isSynced(repoPath) {
+		return "synced"
+	}
+	return "pending_sync"
+}
+
+func isSynced(path string) bool {
+	// Check if has upstream
+	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+	cmd.Dir = path
+	if err := cmd.Run(); err != nil {
+		// No upstream, check if has any remote
+		remoteCmd := exec.Command("git", "remote")
+		remoteCmd.Dir = path
+		remoteOut, _ := remoteCmd.Output()
+		if strings.TrimSpace(string(remoteOut)) == "" {
+			return true // Or 'no_remote' logic if we want to be specific
+		}
+		return false // Has remote but no upstream tracked
+	}
+
+	// Check ahead/behind counts
+	aheadCmd := exec.Command("git", "rev-list", "@{u}..HEAD", "--count")
+	aheadCmd.Dir = path
+	aheadOut, _ := aheadCmd.Output()
+	ahead := strings.TrimSpace(string(aheadOut))
+
+	behindCmd := exec.Command("git", "rev-list", "HEAD..@{u}", "--count")
+	behindCmd.Dir = path
+	behindOut, _ := behindCmd.Output()
+	behind := strings.TrimSpace(string(behindOut))
+
+	return ahead == "0" && behind == "0"
+}
+
+func updateRepo(repoPath string, quiet bool) {
+	status := getGitStatus(repoPath)
+	if !quiet {
+		fmt.Printf("%s: %s\n", repoPath, status)
+	}
+	updateDirectoryIcon(repoPath, status)
+}
+
+func syncAll(quiet bool) {
+	repos := findRepos(basePaths)
+	for _, repo := range repos {
+		updateRepo(repo, quiet)
+	}
+	refreshUI(repos)
+}
+
+func findRepos(bases []string) []string {
+	var repos []string
+	seen := make(map[string]bool)
+	for _, base := range bases {
+		files, err := os.ReadDir(base)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if f.IsDir() {
+				path := filepath.Join(base, f.Name())
+				if !seen[path] {
+					repos = append(repos, path)
+					seen[path] = true
+				}
+			}
+		}
+	}
+	return repos
+}
+
+func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: reposync <command> [options]\n\n")
+		fmt.Fprintf(os.Stderr, "Commands:\n")
+		fmt.Fprintf(os.Stderr, "  run           Run sync once and exit\n")
+		fmt.Fprintf(os.Stderr, "  watch         Start watcher daemon\n")
+		fmt.Fprintf(os.Stderr, "  install-hooks Install git hooks in all repos\n")
+		fmt.Fprintf(os.Stderr, "  setup         Initial setup (hooks + run + watch)\n")
+		fmt.Fprintf(os.Stderr, "\nOptions:\n")
+		flag.PrintDefaults()
+	}
+
+	quiet := flag.Bool("q", false, "Quiet mode")
+	flag.Parse()
+
+	if flag.NArg() < 1 {
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	command := flag.Arg(0)
+
+	switch command {
+	case "run":
+		syncAll(*quiet)
+	case "watch":
+		startWatcher(basePaths)
+	case "install-hooks":
+		installHooksAll(basePaths)
+	case "setup":
+		installHooksAll(basePaths)
+		syncAll(*quiet)
+		fmt.Println("\n[OK] Repositories initialized. Starting watcher...")
+		startWatcher(basePaths)
+	default:
+		fmt.Printf("Unknown command: %s\n", command)
+		flag.Usage()
+		os.Exit(1)
+	}
+}
+
+func installHooksAll(bases []string) {
+	repos := findRepos(bases)
+	self, _ := os.Executable()
+	for _, repo := range repos {
+		installHook(repo, self)
+	}
+	fmt.Printf("Hooks installed in %d repositories.\n", len(repos))
+}
+
+func installHook(repoPath, selfPath string) {
+	hooksDir := filepath.Join(repoPath, ".git", "hooks")
+	os.MkdirAll(hooksDir, 0755)
+
+	hookNames := []string{"post-commit", "post-merge", "post-checkout", "post-rewrite", "post-applypatch", "post-reset", "post-update", "post-switch"}
+	
+	// Convert path for bash (Windows compatibility)
+	selfPath = strings.ReplaceAll(selfPath, "\\", "/")
+	
+	content := fmt.Sprintf("#!/bin/bash\n# Auto-generated by RepoSync\n\"%s\" run -q >/dev/null 2>&1 &\nexit 0\n", selfPath)
+
+	for _, name := range hookNames {
+		hookPath := filepath.Join(hooksDir, name)
+		os.WriteFile(hookPath, []byte(content), 0755)
+	}
+}
