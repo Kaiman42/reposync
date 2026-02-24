@@ -6,31 +6,24 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"syscall"
 )
 
 var (
-	basePaths = []string{}
+	config    Config
+	repoState = make(map[string]*RepoStats)
 )
 
-func init() {
-	// Common patterns
-	possible := []string{
-		expandHome("~/Repos/Github/Meus"),
-		expandHome("~/Repos/Github/Terceiros"),
-		expandHome("~/Repos/Meus"),
-		expandHome("~/Repos/Terceiros"),
-		"D:\\Repos",
-		"D:\\Repos\\TERCEIROS",
-		"D:\\Repos\\Github\\Meus",
-		"D:\\Repos\\Github\\Terceiros",
-	}
+type RepoStats struct {
+	LastChange string `json:"last_change"`
+	Size       string `json:"size"`
+	Status     string `json:"status"`
+}
 
-	for _, p := range possible {
-		if _, err := os.Stat(p); err == nil {
-			basePaths = append(basePaths, p)
-		}
-	}
+func init() {
+	config = loadConfig()
 }
 
 func expandHome(path string) string {
@@ -49,82 +42,114 @@ func getGitStatus(repoPath string) string {
 	// git status --porcelain
 	cmd := exec.Command("git", "status", "--porcelain")
 	cmd.Dir = repoPath
-	output, err := cmd.Output()
-	if err != nil {
-		return "not_init"
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	}
+	output, _ := cmd.Output()
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var hasCommit, hasUntracked bool
+	hasUntracked := false
+	hasModified := false
+
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.Contains(line, ".directory") || strings.Contains(line, "desktop.ini") {
+		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(line, "??") {
+		
+		// O formato porcelain é "XY caminho", onde XY são os estados
+		// Ignora arquivos de sistema
+		if strings.Contains(line, "desktop.ini") || strings.Contains(line, ".directory") {
+			continue
+		}
+
+		statusPart := line[:2]
+		if statusPart == "??" {
 			hasUntracked = true
 		} else {
-			hasCommit = true
+			// Se tem qualquer coisa nas colunas X ou Y que não seja espaço ou ?, é porque houve mudança
+			hasModified = true
 		}
 	}
 
-	if hasCommit {
-		return "commit"
-	}
+	// PRIORIDADE 1: Arquivos não rastreados (Vermelho)
 	if hasUntracked {
 		return "untracked"
 	}
-
-	// Check for sync status (ahead/behind)
-	if isSynced(repoPath) {
-		return "synced"
+	// PRIORIDADE 2: Mudanças pendentes (Amarelo)
+	if hasModified {
+		return "commit"
 	}
-	return "pending_sync"
+
+	// PRIORIDADE 3: Sincronismo com Remoto
+	return getSyncStatus(repoPath)
 }
 
-func isSynced(path string) bool {
-	// Check if has upstream
+func getSyncStatus(path string) string {
+	// Verifica se tem upstream
 	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
 	cmd.Dir = path
-	if err := cmd.Run(); err != nil {
-		// No upstream, check if has any remote
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
+	err := cmd.Run()
+	if err != nil {
+		// Não tem upstream. Verifica se tem qualquer remoto.
 		remoteCmd := exec.Command("git", "remote")
 		remoteCmd.Dir = path
+		if runtime.GOOS == "windows" {
+			remoteCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+		}
 		remoteOut, _ := remoteCmd.Output()
 		if strings.TrimSpace(string(remoteOut)) == "" {
-			return true // Or 'no_remote' logic if we want to be specific
+			// Sem nenhum remoto: Verde (ou use "no_remote" se preferir Laranja)
+			return "no_remote"
 		}
-		return false // Has remote but no upstream tracked
+		// Tem remoto mas não está trackeando nada: Roxo (precisa de push inicial)
+		return "pending_sync"
 	}
 
-	// Check ahead/behind counts
+	// Verifica à frente (Ahead) ou atrás (Behind)
+	// Precisaria de git fetch para o behind, mas o Ahead é instantâneo
 	aheadCmd := exec.Command("git", "rev-list", "@{u}..HEAD", "--count")
 	aheadCmd.Dir = path
+	if runtime.GOOS == "windows" {
+		aheadCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
 	aheadOut, _ := aheadCmd.Output()
 	ahead := strings.TrimSpace(string(aheadOut))
 
 	behindCmd := exec.Command("git", "rev-list", "HEAD..@{u}", "--count")
 	behindCmd.Dir = path
+	if runtime.GOOS == "windows" {
+		behindCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	}
 	behindOut, _ := behindCmd.Output()
 	behind := strings.TrimSpace(string(behindOut))
 
-	return ahead == "0" && behind == "0"
+	if ahead != "0" || behind != "0" {
+		return "pending_sync" // Roxo
+	}
+
+	return "synced" // Verde
 }
 
-func updateRepo(repoPath string, quiet bool) {
+func updateRepo(repoPath string, quiet bool) bool {
 	status := getGitStatus(repoPath)
 	if !quiet {
 		fmt.Printf("%s: %s\n", repoPath, status)
 	}
-	updateDirectoryIcon(repoPath, status)
+	return updateDirectoryIcon(repoPath, status)
 }
 
 func syncAll(quiet bool) {
-	repos := findRepos(basePaths)
+	repos := findRepos(config.BasePaths)
+	var updated []string
 	for _, repo := range repos {
-		updateRepo(repo, quiet)
+		if updateRepo(repo, quiet) {
+			updated = append(updated, repo)
+		}
 	}
-	refreshUI(repos)
+	refreshUI(updated)
 }
 
 func findRepos(bases []string) []string {
@@ -174,14 +199,16 @@ func main() {
 	case "run":
 		syncAll(*quiet)
 	case "watch":
-		startWatcher(basePaths)
+		startWatcher(config.BasePaths)
+	case "dashboard":
+		startDashboard()
 	case "install-hooks":
-		installHooksAll(basePaths)
+		installHooksAll(config.BasePaths)
 	case "setup":
-		installHooksAll(basePaths)
+		installHooksAll(config.BasePaths)
 		syncAll(*quiet)
 		fmt.Println("\n[OK] Repositories initialized. Starting watcher...")
-		startWatcher(basePaths)
+		startWatcher(config.BasePaths)
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		flag.Usage()

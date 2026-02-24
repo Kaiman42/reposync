@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +32,12 @@ func startWatcher(bases []string) {
 				if !ok {
 					return
 				}
+				// Ignora alterações nos arquivos de ícones para evitar loop infinito
+				name := strings.ToLower(event.Name)
+				if strings.HasSuffix(name, "desktop.ini") || strings.HasSuffix(name, ".directory") {
+					continue
+				}
+
 				repo := findRepoRoot(event.Name)
 				if repo != "" {
 					mu.Lock()
@@ -62,22 +69,49 @@ func startWatcher(bases []string) {
 			mu.Unlock()
 
 			if len(toUpdate) > 0 {
+				var reallyUpdated []string
 				for _, repo := range toUpdate {
-					updateRepo(repo, true)
+					if updateRepo(repo, true) {
+						reallyUpdated = append(reallyUpdated, repo)
+					}
 				}
-				refreshUI(toUpdate)
+				refreshUI(reallyUpdated)
 			}
 		}
 	}()
 
-	// Add repos to watcher
+	// Add repos to watcher recursively
 	for _, repo := range repos {
-		err = watcher.Add(filepath.Join(repo, ".git"))
-		if err != nil {
-			// Some systems might not like watching the .git folder directly if it has many files
-			// but for status changes it's the most reliable.
-			log.Printf("Warning: could not watch %s: %v", repo, err)
-		}
+		filepath.Walk(repo, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info.IsDir() {
+				// Pula pastas pesadas ou internas
+				name := info.Name()
+				if name == "node_modules" || name == "vendor" || name == "bin" || name == "obj" {
+					return filepath.SkipDir
+				}
+				// Watch .git folder and its critical files
+				if name == ".git" {
+					watcher.Add(path)
+					// Monitora arquivos vitais para mudanças de status/remoto/branch
+					critical := []string{"config", "index", "HEAD", "FETCH_HEAD"}
+					for _, c := range critical {
+						cPath := filepath.Join(path, c)
+						if _, err := os.Stat(cPath); err == nil {
+							watcher.Add(cPath)
+						}
+					}
+					return filepath.SkipDir
+				}
+				err = watcher.Add(path)
+				if err != nil {
+					log.Printf("Warning: could not watch %s: %v", path, err)
+				}
+			}
+			return nil
+		})
 	}
 
 	log.Printf("Watching %d repositories...", len(repos))

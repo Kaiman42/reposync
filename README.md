@@ -9,27 +9,25 @@ Versão em Go do RepoSync, agora como um único binário ultra-rápido e sem dep
 - **Sem dependências**: Basta baixar o binário e rodar. Não precisa de Python ou pacotes extras.
 - **Multiplataforma**: Funciona perfeitamente no Fedora 43 (KDE/Plasma) e Windows.
 
-## Comandos
+## Estrutura do Projeto
 
-O `reposync` possui subcomandos integrados:
-
-- `reposync setup`: Instala os git-hooks, atualiza todos os ícones e inicia o watcher (daemon). **Este é o comando que faz tudo.**
-- `reposync run`: Sincroniza os ícones de todos os repositórios uma única vez.
-- `reposync watch`: Inicia apenas o monitoramento em tempo real.
-- `reposync install-hooks`: Instala os hooks nos repositórios para que ações Git (commit, merge, etc) disparem a atualização.
+O projeto está organizado por sistema operacional:
+- `windows/`: Contém o binário `.exe`, os ícones customizados e a lógica de UI do Windows.
+- `linux/`: Contém o binário para Linux, o serviço systemd e a lógica de UI para Linux.
+- Raiz: Código core em Go, configurações e documentação.
 
 ## Uso no Windows
 
 Apenas rode:
 ```powershell
-.\reposync.exe setup
+.\windows\reposync.exe setup
 ```
 
 ## Uso no Linux (Fedora)
 
 Apenas rode:
 ```bash
-./reposync setup
+./linux/reposync setup
 ```
 
 ## Compilação (Desenvolvimento)
