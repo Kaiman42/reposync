@@ -61,7 +61,7 @@ func startWatcher(bases []string) {
 			mu.Lock()
 			now := time.Now()
 			for repo, lastChange := range pending {
-				if now.Sub(lastChange) >= 2*time.Second {
+				if now.Sub(lastChange) >= 500*time.Millisecond {
 					toUpdate = append(toUpdate, repo)
 					delete(pending, repo)
 				}

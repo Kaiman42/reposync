@@ -28,6 +28,12 @@ async function fetchData() {
     } catch (e) { console.error(e); } finally { hideLoader(); }
 }
 
+// Polling auto-update (Faster check)
+setInterval(fetchData, 5000);
+
+// Instant focus refresh
+window.addEventListener('focus', fetchData);
+
 async function fetchRepoDetails(path) {
     const res = await fetch('/api/repo-details?path=' + encodeURIComponent(path));
     return await res.json();
