@@ -8,28 +8,61 @@ import shutil
 from datetime import datetime
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+# Config file at project root (parent of bin)
+CONFIG_FILE = os.path.join(os.path.dirname(SCRIPT_DIR), 'watched_paths.conf')
 REPOSYNC = os.path.join(SCRIPT_DIR, 'reposync.py')
 DEFAULT_BASES = ['/home/kaiman/Repos/Github/Meus', '/home/kaiman/Repos/Github/Terceiros']
 DEBOUNCE_MS = int(os.environ.get('DEBOUNCE_MS', '2000'))
+
+def is_git_repo(path):
+    # Standard repo (has .git dir)
+    if os.path.isdir(os.path.join(path, '.git')):
+        return True
+    # Bare repo (has HEAD, config, refs files/dirs inline)
+    if os.path.isfile(os.path.join(path, 'HEAD')) and \
+       os.path.isfile(os.path.join(path, 'config')) and \
+       os.path.isdir(os.path.join(path, 'refs')):
+        return True
+    return False
 
 def find_repos(bases):
     repos = []
     seen = set()
     for base in bases:
-        if not os.path.isdir(base):
+        base = base.strip()
+        if not base or not os.path.isdir(base):
             continue
-        for name in os.listdir(base):
-            p = os.path.join(base, name)
-            if os.path.isdir(os.path.join(p, '.git')) and p not in seen:
-                repos.append(p)
-                seen.add(p)
+        
+        # Check if base itself is a repo
+        if is_git_repo(base):
+            if base not in seen:
+                repos.append(base)
+                seen.add(base)
+            continue
+
+        # Check children if base is not a repo itself
+        try:
+            for name in os.listdir(base):
+                p = os.path.join(base, name)
+                if os.path.isdir(p) and is_git_repo(p) and p not in seen:
+                    repos.append(p)
+                    seen.add(p)
+        except OSError:
+            pass
     return repos
 
 def repo_root(path):
     path = os.path.abspath(path)
+    # Check if path itself is root of bare or standard
+    if is_git_repo(path):
+        return path
+        
     while True:
         if os.path.isdir(os.path.join(path, '.git')):
             return path
+        # Note: Walking up for bare repos is harder as files look normal. 
+        # Focusing on standard detection for parent walk for now.
+        
         parent = os.path.dirname(path)
         if parent == path:
             return None
@@ -44,11 +77,18 @@ def get_detailed_status(repo):
     - 'both': possui alterações não commitadas E commits não enviados
     """
     dirty = False
+    is_bare = False
+    
+    # Check if bare
+    if os.path.isfile(os.path.join(repo, 'HEAD')) and not os.path.isdir(os.path.join(repo, '.git')):
+         is_bare = True
+
     try:
-        # Verifica se há alterações (porcelain retorna output se houver)
-        res = subprocess.run(['git', 'status', '--porcelain'], cwd=repo, capture_output=True, text=True, timeout=5)
-        if res.returncode == 0 and res.stdout.strip():
-            dirty = True
+        if not is_bare:
+            # Verifica se há alterações (porcelain retorna output se houver)
+            res = subprocess.run(['git', 'status', '--porcelain'], cwd=repo, capture_output=True, text=True, timeout=5)
+            if res.returncode == 0 and res.stdout.strip():
+                dirty = True
     except Exception:
         pass
 
@@ -211,12 +251,33 @@ def watcher_loop(paths, repos):
         return
 
 def main(argv):
-    bases = argv if argv else DEFAULT_BASES
+    bases = []
+    
+    if argv:
+        bases = argv
+    elif os.path.isfile(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                bases = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+        except Exception as e:
+            print(f"Erro ao ler config: {e}", file=sys.stderr)
+    
+    if not bases:
+        bases = DEFAULT_BASES
+
     repos = find_repos(bases)
     if not repos:
         print('Nenhum repositório encontrado.', file=sys.stderr)
         return 1
     print(f'Observando {len(repos)} repositórios. Debounce {DEBOUNCE_MS}ms. Notificação diária às 22h.')
+    for r in repos:
+        print(f" - {r}", flush=True)
+
+    # Initial sync
+    print("Realizando sincronização inicial...", flush=True)
+    for r in repos:
+        run_reposync(r)
+    
     watcher_loop(repos, repos)
     return 0
 

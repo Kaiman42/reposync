@@ -16,6 +16,10 @@ Commands:
   disable      Disable the service
   restart      Restart the service
   stop         Stop the service
+  gui          Show visual interface
+  colors       Show color legend for folder icons
+  repos        Gerenciar locais monitorados (list, add, remove)
+
 
 Options:
   --user       Operate on the user unit (in ~/.config/systemd/user)
@@ -280,6 +284,153 @@ stop_service() {
     fi
 }
 
+# Show Colors Legend
+show_colors() {
+    echo "=== Legenda de Cores (Ícones de Pasta) ==="
+    echo -e "\033[1;32m● Verde\033[0m    : Sincronizado (Clean)"
+    echo -e "\033[1;33m● Amarelo\033[0m  : Alterado (Mudanças não commitadas - Modified/Deleted)"
+    echo -e "\033[1;31m● Vermelho\033[0m : Não Rasteado (Novos arquivos - Untracked)"
+    echo -e "\033[1;35m● Violeta\033[0m  : Pendente (Sync necessário - Ahead/Behind)"
+    # Tentar usar laranja via 256 colors (208), fallback para amarelo escuro se não suportado, mas na dúvida usamos o texto claro
+    echo -e "\033[38;5;208m● Laranja\033[0m  : Sem Remote (Repositório apenas local)"
+    echo -e "\033[1;30m● Preto\033[0m    : Não Git / Não inicializado / Erro"
+    echo "=========================================="
+}
+
+# Show GUI
+show_gui() {
+    local GUI_TOOL=""
+    if command -v zenity >/dev/null 2>&1; then
+        GUI_TOOL="zenity"
+    elif command -v whiptail >/dev/null 2>&1; then
+        GUI_TOOL="whiptail"
+    else
+        echo "Erro: Nem 'zenity' nem 'whiptail' encontrados para interface visual."
+        echo "Instale um deles para usar o modo GUI."
+        exit 1
+    fi
+
+    local ACTION=""
+    
+    while true; do
+        if [ "$GUI_TOOL" = "zenity" ]; then
+            ACTION=$(zenity --list --title="RepoSync Manager ($MODE)" \
+                --text="Escolha uma ação:" \
+                --column="Comando" --column="Descrição" \
+                "status" "Ver status do serviço" \
+                "restart" "Reiniciar serviço" \
+                "stop" "Parar serviço" \
+                "colors" "Ver legenda de cores" \
+                "enable" "Habilitar e Iniciar serviço" \
+                "disable" "Parar e Desabilitar serviço" \
+                "setup" "Instalar/Configurar dependências e serviço" \
+                "uninstall" "Remover serviço completamente" \
+                --height=400 --width=500 --print-column=1 2>/dev/null) || break
+        else
+            ACTION=$(whiptail --title "RepoSync Manager ($MODE)" --menu "Escolha uma ação:" 20 70 10 \
+                "status" "Ver status do serviço" \
+                "restart" "Reiniciar serviço" \
+                "stop" "Parar serviço" \
+                "colors" "Ver legenda de cores" \
+                "enable" "Habilitar e Iniciar serviço" \
+                "disable" "Parar e Desabilitar serviço" \
+                "setup" "Instalar/Configurar dependências e serviço" \
+                "uninstall" "Remover serviço completamente" 3>&1 1>&2 2>&3) || break
+        fi
+
+        [ -z "$ACTION" ] && break
+
+        # Helper to capture execution output and show it
+        local OUTPUT
+        if OUTPUT=$(bash "$REPO_DIR/rs.sh" "$ACTION" "--$MODE" 2>&1); then
+            if [ "$GUI_TOOL" = "zenity" ]; then
+                echo "$OUTPUT" | zenity --text-info --title="Resultado: $ACTION" --width=700 --height=500
+            else
+                echo "$OUTPUT" | whiptail --title "Resultado: $ACTION" --scrolltext --textbox /dev/stdin 20 70
+            fi
+        else
+            if [ "$GUI_TOOL" = "zenity" ]; then
+                echo "$OUTPUT" | zenity --text-info --title="Erro: $ACTION" --width=700 --height=500 --ok-label="Fechar"
+            else
+                echo "$OUTPUT" | whiptail --title "Erro: $ACTION" --scrolltext --textbox /dev/stdin 20 70
+            fi
+        fi
+    done
+}
+
+# Manage repositories/paths
+manage_repos() {
+    local SUB_CMD="${1:-list}"
+    local ARG="${2:-}"
+    local CONFIG="$REPO_DIR/watched_paths.conf"
+
+    # Inicializa com defaults se não existir
+    if [ ! -f "$CONFIG" ]; then
+        echo "/home/kaiman/Repos/Github/Meus" > "$CONFIG"
+        echo "/home/kaiman/Repos/Github/Terceiros" >> "$CONFIG"
+    fi
+
+    case "$SUB_CMD" in
+        list)
+            echo "=== Locais Monitorados ==="
+            if [ -s "$CONFIG" ]; then
+                cat -n "$CONFIG"
+            else
+                echo "(Lista vazia)"
+            fi
+            echo "=========================="
+            ;;
+        add)
+            if [ -z "$ARG" ]; then
+                echo "Uso: $0 repos add <caminho>"
+                exit 1
+            fi
+            
+            # Resolve path absolute
+            local ABS_PATH
+            if ! ABS_PATH=$(readlink -f "$ARG" 2>/dev/null); then
+                echo "Erro: Caminho inválido."
+                exit 1
+            fi
+
+            if [ ! -d "$ABS_PATH" ]; then
+                echo "Erro: Diretório não encontrado: $ABS_PATH"
+                exit 1
+            fi
+            
+            if grep -Fxq "$ABS_PATH" "$CONFIG"; then
+                echo "Aviso: Já está na lista: $ABS_PATH"
+            else
+                echo "$ABS_PATH" >> "$CONFIG"
+                echo "Adicionado: $ABS_PATH"
+                echo "Nota: Execute '$0 restart' para aplicar."
+            fi
+            ;;
+        remove)
+            if [ -z "$ARG" ]; then
+                echo "Uso: $0 repos remove <caminho>"
+                exit 1
+            fi
+
+            local ABS_PATH
+            # Tenta resolver, se falhar usa o argumento cru (caso o dir tenha sido deletado)
+            ABS_PATH=$(readlink -f "$ARG" 2>/dev/null || echo "$ARG")
+             
+            if grep -Fq "$ABS_PATH" "$CONFIG"; then
+                grep -Fv "$ABS_PATH" "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
+                echo "Removido: $ABS_PATH"
+                echo "Nota: Execute '$0 restart' para aplicar."
+            else
+                echo "Erro: Caminho não encontrado na lista: $ABS_PATH"
+            fi
+            ;;
+        *)
+            echo "Comando inválido. Uso: $0 repos <list|add|remove>"
+            exit 1
+            ;;
+    esac
+}
+
 # Main dispatch
 case "$CMD" in
     setup)
@@ -303,6 +454,21 @@ case "$CMD" in
         ;;
     stop)
         stop_service
+        ;;
+    colors)
+        show_colors
+        ;;
+    gui)
+        show_gui
+        ;;
+    repos)
+        # Shift CMD
+        SUB_CMD="${1:-}"
+        ARGS="${2:-}"
+        # Se usarmos shift no topo, $1 agora é o SUB_CMD
+        # Mas no bash script original: CMD="$1"; shift
+        # Então $1 é o primeiro argumento APÓS 'repos'
+        manage_repos "${1:-}" "${2:-}"
         ;;
     *)
         print_usage
