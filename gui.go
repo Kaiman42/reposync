@@ -150,17 +150,11 @@ func getBasePaths(w http.ResponseWriter, _ *http.Request) {
 }
 
 func handleRemovePath(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		return
-	}
-	var req struct {
-		Path string `json:"path"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
+	reqPath := r.URL.Query().Get("path")
 
 	newPaths := []string{}
 	for _, p := range config.BasePaths {
-		if !strings.EqualFold(p, req.Path) {
+		if !strings.EqualFold(p, reqPath) {
 			newPaths = append(newPaths, p)
 		}
 	}
@@ -170,24 +164,18 @@ func handleRemovePath(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleAddPath(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		return
-	}
-	var req struct {
-		Path string `json:"path"`
-	}
-	json.NewDecoder(r.Body).Decode(&req)
+	reqPath := r.URL.Query().Get("path")
 
-	if req.Path != "" {
+	if reqPath != "" {
 		exists := false
 		for _, p := range config.BasePaths {
-			if strings.EqualFold(p, req.Path) {
+			if strings.EqualFold(p, reqPath) {
 				exists = true
 				break
 			}
 		}
 		if !exists {
-			config.BasePaths = append(config.BasePaths, req.Path)
+			config.BasePaths = append(config.BasePaths, reqPath)
 			saveConfig(config)
 		}
 	}

@@ -266,8 +266,8 @@ async function fetchBasePaths() {
     } catch (e) { console.error(e); }
 }
 
-async function removePath(path) { if (confirm('Remover?')) { await fetch('/api/remove-path', { method: 'POST', body: JSON.stringify({ path }), headers: { 'Content-Type': 'application/json' } }); fetchBasePaths(); } }
-async function addPath() { const p = prompt("Caminho:"); if (p) { await fetch('/api/add-path', { method: 'POST', body: JSON.stringify({ path: p }), headers: { 'Content-Type': 'application/json' } }); fetchBasePaths(); } }
+async function removePath(path) { if (confirm('Remover?')) { await fetch('/api/remove-path?path=' + encodeURIComponent(path)); fetchBasePaths(); } }
+async function addPath() { const p = prompt("Caminho:"); if (p) { await fetch('/api/add-path?path=' + encodeURIComponent(p)); fetchBasePaths(); } }
 
 // Daemon Modal Logic
 let startTime = Date.now();
