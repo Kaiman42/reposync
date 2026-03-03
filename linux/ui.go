@@ -1,4 +1,5 @@
 //go:build !windows
+
 package linux
 
 import (
@@ -25,7 +26,7 @@ func UpdateDirectoryIcon(path, status string) bool {
 	}
 
 	content := fmt.Sprintf("[Desktop Entry]\nIcon=%s\n", icon)
-	
+
 	// Verifica se mudou
 	old, _ := os.ReadFile(dotDir)
 	if string(old) == content {
@@ -33,7 +34,7 @@ func UpdateDirectoryIcon(path, status string) bool {
 	}
 
 	os.WriteFile(dotDir, []byte(content), 0644)
-	
+
 	// Touch directory to refresh view
 	exec.Command("touch", path).Run()
 	return true

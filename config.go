@@ -14,7 +14,7 @@ type Config struct {
 func loadConfig() Config {
 	execPath, _ := os.Executable()
 	configPath := filepath.Join(filepath.Dir(execPath), "config.json")
-	
+
 	var cfg Config
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -23,7 +23,7 @@ func loadConfig() Config {
 		saveConfig(cfg)
 		return cfg
 	}
-	
+
 	json.Unmarshal(data, &cfg)
 	return cfg
 }

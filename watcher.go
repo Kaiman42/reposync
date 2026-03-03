@@ -20,7 +20,7 @@ func startWatcher(bases []string) {
 
 	done := make(chan bool)
 	repos := findRepos(bases)
-	
+
 	// Map to track changes with debounce
 	pending := make(map[string]time.Time)
 	var mu sync.Mutex
@@ -69,13 +69,9 @@ func startWatcher(bases []string) {
 			mu.Unlock()
 
 			if len(toUpdate) > 0 {
-				var reallyUpdated []string
 				for _, repo := range toUpdate {
-					if updateRepo(repo, true) {
-						reallyUpdated = append(reallyUpdated, repo)
-					}
+					updateRepo(repo, true)
 				}
-				refreshUI(reallyUpdated)
 			}
 		}
 	}()
