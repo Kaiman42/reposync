@@ -29,3 +29,5 @@ __pycache__/
 # Arquivos de ambiente e configuração local
 .env
 watched_paths.conf
+
+config.json
