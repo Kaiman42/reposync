@@ -1,2 +1,8 @@
 .directory
 __pycache__
+desktop.ini
+reposync.exe
+windows/reposync.exe
+*.exe
+*.log
+*~
