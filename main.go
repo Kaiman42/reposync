@@ -11,8 +11,7 @@ import (
 )
 
 var (
-	config    Config
-	repoState = make(map[string]*RepoStats)
+	config Config
 )
 
 type RepoStats struct {
@@ -23,14 +22,6 @@ type RepoStats struct {
 
 func init() {
 	config = loadConfig()
-}
-
-func expandHome(path string) string {
-	if strings.HasPrefix(path, "~") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, path[1:])
-	}
-	return path
 }
 
 func getGitStatus(repoPath string) string {
@@ -183,8 +174,9 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() < 1 {
-		flag.Usage()
-		os.Exit(1)
+		// Abre o Wails Dashboard nativo por padrão (necessário para o "wails build" e uso como App Desktop)
+		startDashboard()
+		return
 	}
 
 	command := flag.Arg(0)

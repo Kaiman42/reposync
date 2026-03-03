@@ -1,8 +1,31 @@
-.directory
-__pycache__
-desktop.ini
+# IDEs
+.vscode/
+.idea/
+
+# Binários gerados por Go / Linux
+reposync
 reposync.exe
-windows/reposync.exe
 *.exe
+
+# Pastas de saída do Wails
+build/bin/
+frontend/dist/
+
+# Dependências do frontend
+node_modules/
+frontend/node_modules/
+
+# OS Específicos adicionais
+.DS_Store
+Thumbs.db
+desktop.ini
+.directory
+
+# Arquivos de log e temporários
 *.log
 *~
+__pycache__/
+
+# Arquivos de ambiente e configuração local
+.env
+watched_paths.conf
