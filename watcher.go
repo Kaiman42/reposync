@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,11 +30,6 @@ func startWatcher(bases []string) {
 			case event, ok := <-watcher.Events:
 				if !ok {
 					return
-				}
-				// Ignora alterações nos arquivos de ícones para evitar loop infinito
-				name := strings.ToLower(event.Name)
-				if strings.HasSuffix(name, "desktop.ini") || strings.HasSuffix(name, ".directory") {
-					continue
 				}
 
 				repo := findRepoRoot(event.Name)

@@ -137,6 +137,17 @@ func handleOpenAction(_ http.ResponseWriter, r *http.Request) {
 			cmd.SysProcAttr = getSysProcAttr()
 		}
 		cmd.Run()
+	case "open_with":
+		customArgs := strings.Fields(r.URL.Query().Get("custom"))
+		if len(customArgs) > 0 {
+			cmdName := customArgs[0]
+			args := append(customArgs[1:], path)
+			cmd := exec.Command(cmdName, args...)
+			if runtime.GOOS == "windows" {
+				cmd.SysProcAttr = getSysProcAttr()
+			}
+			cmd.Start()
+		}
 	case "remote":
 		url := r.URL.Query().Get("url")
 		if url != "" {
