@@ -35,8 +35,8 @@ Apenas rode:
 Se você quiser compilar manualmente:
 
 ```bash
-# Para Windows
-go build -o reposync.exe .
+# Para Windows (esconde o terminal)
+go build -ldflags="-H windowsgui" -o reposync.exe .
 
 # Para Linux
 GOOS=linux GOARCH=amd64 go build -o reposync .

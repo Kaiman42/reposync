@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -12,6 +13,14 @@ import (
 )
 
 func startWatcher(bases []string) {
+	defer func() {
+		if r := recover(); r != nil {
+			errStr := fmt.Sprintf("WATCHER PANIC: %v", r)
+			fmt.Println(errStr)
+			showMessage("RepoSync - Erro no Watcher", errStr)
+		}
+	}()
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
@@ -20,7 +29,7 @@ func startWatcher(bases []string) {
 
 	done := make(chan bool)
 	repos := findRepos(bases)
-	
+
 	// Map to track changes with debounce
 	pending := make(map[string]time.Time)
 	var mu sync.Mutex
