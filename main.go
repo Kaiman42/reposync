@@ -129,13 +129,9 @@ func updateRepo(repoPath string, quiet bool) bool {
 
 func syncAll(quiet bool) {
 	repos := findRepos(config.BasePaths)
-	var updated []string
 	for _, repo := range repos {
-		if updateRepo(repo, quiet) {
-			updated = append(updated, repo)
-		}
+		updateRepo(repo, quiet)
 	}
-	refreshUI(updated)
 }
 
 func findRepos(bases []string) []string {
