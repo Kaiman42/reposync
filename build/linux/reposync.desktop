@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=RepoSync
+Comment=Git Repository Sync Utility
+Exec=reposync
+Icon=reposync
+Terminal=false
+Categories=Development;
