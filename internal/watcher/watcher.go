@@ -1,4 +1,4 @@
-package main
+package watcher
 
 import (
 	"fmt"
@@ -9,45 +9,46 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/Kaiman42/reposync/internal/git"
+	"github.com/Kaiman42/reposync/internal/ui"
 )
 
-func startWatcher(bases []string) {
+func StartWatcher(bases []string) {
 	defer func() {
 		if r := recover(); r != nil {
 			errStr := fmt.Sprintf("WATCHER PANIC: %v", r)
 			fmt.Println(errStr)
-			showMessage("RepoSync - Erro no Watcher", errStr)
+			ui.ShowMessage("RepoSync - Erro no Watcher", errStr)
 		}
 	}()
 
-	watcher, err := fsnotify.NewWatcher()
+	w, err := fsnotify.NewWatcher()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer watcher.Close()
+	defer w.Close()
 
 	done := make(chan bool)
-	repos := findRepos(bases)
+	repos := git.FindRepos(bases)
 
-	// Map to track changes with debounce
 	pending := make(map[string]time.Time)
 	var mu sync.Mutex
 
 	go func() {
 		for {
 			select {
-			case event, ok := <-watcher.Events:
+			case event, ok := <-w.Events:
 				if !ok {
 					return
 				}
 
-				repo := findRepoRoot(event.Name)
+				repo := FindRepoRoot(event.Name)
 				if repo != "" {
 					mu.Lock()
 					pending[repo] = time.Now()
 					mu.Unlock()
 				}
-			case err, ok := <-watcher.Errors:
+			case err, ok := <-w.Errors:
 				if !ok {
 					return
 				}
@@ -56,7 +57,6 @@ func startWatcher(bases []string) {
 		}
 	}()
 
-	// Debounce goroutine
 	go func() {
 		for {
 			time.Sleep(1 * time.Second)
@@ -73,38 +73,39 @@ func startWatcher(bases []string) {
 
 			if len(toUpdate) > 0 {
 				for _, repo := range toUpdate {
-					updateRepo(repo, true)
+					// We need a way to update the repo. 
+					// In the original it called updateRepo(repo, true)
+					// updateRepo was in main.go
+					// It just calls getGitStatus and updateDirectoryIcon
+					status := git.GetGitStatus(repo)
+					ui.UpdateDirectoryIcon(repo, status)
 				}
 			}
 		}
 	}()
 
-	// Add repos to watcher recursively
 	for _, repo := range repos {
 		filepath.Walk(repo, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil
 			}
 			if info.IsDir() {
-				// Pula pastas pesadas ou internas
 				name := info.Name()
 				if name == "node_modules" || name == "vendor" || name == "bin" || name == "obj" {
 					return filepath.SkipDir
 				}
-				// Watch .git folder and its critical files
 				if name == ".git" {
-					watcher.Add(path)
-					// Monitora arquivos vitais para mudanças de status/remoto/branch
+					w.Add(path)
 					critical := []string{"config", "index", "HEAD", "FETCH_HEAD"}
 					for _, c := range critical {
 						cPath := filepath.Join(path, c)
 						if _, err := os.Stat(cPath); err == nil {
-							watcher.Add(cPath)
+							w.Add(cPath)
 						}
 					}
 					return filepath.SkipDir
 				}
-				err = watcher.Add(path)
+				err = w.Add(path)
 				if err != nil {
 					log.Printf("Warning: could not watch %s: %v", path, err)
 				}
@@ -117,7 +118,7 @@ func startWatcher(bases []string) {
 	<-done
 }
 
-func findRepoRoot(path string) string {
+func FindRepoRoot(path string) string {
 	curr := path
 	for {
 		if _, err := os.Stat(filepath.Join(curr, ".git")); err == nil {

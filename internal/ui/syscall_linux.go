@@ -1,10 +1,10 @@
 //go:build !windows
 // +build !windows
 
-package main
+package ui
 
 import "syscall"
 
-func getSysProcAttr() *syscall.SysProcAttr {
+func GetSysProcAttr() *syscall.SysProcAttr {
 	return nil
 }

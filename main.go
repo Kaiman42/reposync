@@ -15,158 +15,51 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+
+	"github.com/Kaiman42/reposync/internal/config"
+	"github.com/Kaiman42/reposync/internal/git"
+	"github.com/Kaiman42/reposync/internal/ui"
+	"github.com/Kaiman42/reposync/internal/watcher"
 )
 
 //go:embed all:frontend
 var assets embed.FS
 
-//go:embed linux/reposync.svg
+//go:embed resources/reposync.svg
 var faviconSVG []byte
 
-//go:embed icons/Reposync.ico
+//go:embed build/windows/icon.ico
 var iconICO []byte
 
 var (
-	config Config
+	cfg config.Config
 )
 
-func getGitStatus(repoPath string) string {
-	if _, err := os.Stat(filepath.Join(repoPath, ".git")); os.IsNotExist(err) {
-		return "not_init"
-	}
-
-	// git status --porcelain
-	cmd := exec.Command("git", "status", "--porcelain")
-	cmd.Dir = repoPath
-	cmd.SysProcAttr = getSysProcAttr()
-	output, _ := cmd.Output()
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	hasUntracked := false
-	hasModified := false
-
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-
-		// O formato porcelain é "XY caminho", onde XY são os estados
-		// Ignora arquivos de sistema
-		if strings.Contains(line, "desktop.ini") || strings.Contains(line, ".directory") {
-			continue
-		}
-
-		statusPart := line[:2]
-		if statusPart == "??" {
-			hasUntracked = true
-		} else {
-			// Se tem qualquer coisa nas colunas X ou Y que não seja espaço ou ?, é porque houve mudança
-			hasModified = true
-		}
-	}
-
-	// PRIORIDADE 1: Arquivos não rastreados (Vermelho)
-	if hasUntracked {
-		return "untracked"
-	}
-	// PRIORIDADE 2: Mudanças pendentes (Amarelo)
-	if hasModified {
-		return "commit"
-	}
-
-	// PRIORIDADE 3: Sincronismo com Remoto
-	return getSyncStatus(repoPath)
-}
-
-func getSyncStatus(path string) string {
-	// Verifica se tem upstream
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-	cmd.Dir = path
-	cmd.SysProcAttr = getSysProcAttr()
-	err := cmd.Run()
-	if err != nil {
-		// Não tem upstream. Verifica se tem qualquer remoto.
-		remoteCmd := exec.Command("git", "remote")
-		remoteCmd.Dir = path
-		remoteCmd.SysProcAttr = getSysProcAttr()
-		remoteOut, _ := remoteCmd.Output()
-		if strings.TrimSpace(string(remoteOut)) == "" {
-			// Sem nenhum remoto: Verde (ou use "no_remote" se preferir Laranja)
-			return "no_remote"
-		}
-		// Tem remoto mas não está trackeando nada: Roxo (precisa de push inicial)
-		return "pending_sync"
-	}
-
-	// Verifica à frente (Ahead) ou atrás (Behind)
-	// Precisaria de git fetch para o behind, mas o Ahead é instantâneo
-	aheadCmd := exec.Command("git", "rev-list", "@{u}..HEAD", "--count")
-	aheadCmd.Dir = path
-	aheadCmd.SysProcAttr = getSysProcAttr()
-	aheadOut, _ := aheadCmd.Output()
-	ahead := strings.TrimSpace(string(aheadOut))
-
-	behindCmd := exec.Command("git", "rev-list", "HEAD..@{u}", "--count")
-	behindCmd.Dir = path
-	behindCmd.SysProcAttr = getSysProcAttr()
-	behindOut, _ := behindCmd.Output()
-	behind := strings.TrimSpace(string(behindOut))
-
-	if ahead != "0" || behind != "0" {
-		return "pending_sync" // Roxo
-	}
-
-	return "synced" // Verde
-}
-
 func updateRepo(repoPath string, quiet bool) bool {
-	status := getGitStatus(repoPath)
+	status := git.GetGitStatus(repoPath)
 	if !quiet {
 		fmt.Printf("%s: %s\n", repoPath, status)
 	}
-	return updateDirectoryIcon(repoPath, status)
+	return ui.UpdateDirectoryIcon(repoPath, status)
 }
 
 func syncAll(quiet bool) {
-	repos := findRepos(config.BasePaths)
+	repos := git.FindRepos(cfg.BasePaths)
 	for _, repo := range repos {
 		updateRepo(repo, quiet)
 	}
 }
 
-func findRepos(bases []string) []string {
-	var repos []string
-	seen := make(map[string]bool)
-	for _, base := range bases {
-		files, err := os.ReadDir(base)
-		if err != nil {
-			continue
-		}
-		for _, f := range files {
-			if f.IsDir() {
-				path := filepath.Join(base, f.Name())
-				if !seen[path] {
-					repos = append(repos, path)
-					seen[path] = true
-				}
-			}
-		}
-	}
-	return repos
-}
-
 func main() {
-
 	defer func() {
 		if r := recover(); r != nil {
 			errStr := fmt.Sprintf("PANIC FATAL: %v", r)
-			showMessage("RepoSync - Erro Fatal", errStr)
+			ui.ShowMessage("RepoSync - Erro Fatal", errStr)
 			os.Exit(1)
 		}
 	}()
 
-	// Carrega a config aqui dentro para ser capturado pelo recover
-	config = loadConfig()
+	cfg = config.LoadConfig()
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: reposync <command> [options]\n\n")
@@ -192,21 +85,21 @@ func main() {
 	case "run":
 		syncAll(*quiet)
 	case "watch":
-		startWatcher(config.BasePaths)
+		watcher.StartWatcher(cfg.BasePaths)
 	case "dashboard":
 		go func() {
-			defer func() { recover() }() // Silencia erros na thread do watcher para não matar o app
-			startWatcher(config.BasePaths)
+			defer func() { recover() }()
+			watcher.StartWatcher(cfg.BasePaths)
 		}()
 		startDashboardGUI()
 	case "install-hooks":
-		installHooksAll(config.BasePaths)
+		git.InstallHooksAll(cfg.BasePaths)
 	case "setup":
 		createShortcut()
-		installHooksAll(config.BasePaths)
+		git.InstallHooksAll(cfg.BasePaths)
 		syncAll(*quiet)
 		fmt.Println("\n[OK] Repositories initialized. Starting watcher...")
-		startWatcher(config.BasePaths)
+		watcher.StartWatcher(cfg.BasePaths)
 	case "create-shortcut":
 		createShortcut()
 	default:
@@ -219,7 +112,6 @@ func main() {
 func startDashboardGUI() {
 	app := NewApp()
 
-	// Garante que o Wails veja o conteúdo da pasta frontend como a raiz do app
 	assetsRoot, err := fs.Sub(assets, "frontend")
 	if err != nil {
 		fatalError("Erro ao acessar arquivos internos: " + err.Error())
@@ -246,24 +138,7 @@ func startDashboardGUI() {
 
 func fatalError(msg string) {
 	fmt.Println(msg)
-	showMessage("RepoSync - Erro", msg)
-}
-
-func getRemoteURL(path string) string {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
-	cmd.Dir = path
-	cmd.SysProcAttr = getSysProcAttr()
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	url := strings.TrimSpace(string(out))
-	if strings.HasPrefix(url, "git@") {
-		url = strings.Replace(url, ":", "/", 1)
-		url = strings.Replace(url, "git@", "https://", 1)
-		url = strings.TrimSuffix(url, ".git")
-	}
-	return url
+	ui.ShowMessage("RepoSync - Erro", msg)
 }
 
 func getFolderSize(path string) string {
@@ -283,23 +158,6 @@ func getFolderSize(path string) string {
 		return fmt.Sprintf("%.1f KB", float64(size)/1024)
 	}
 	return fmt.Sprintf("%.1f MB", float64(size)/1024/1024)
-}
-
-func getRepoLastMod(path string) time.Time {
-	cmd := exec.Command("git", "log", "-1", "--format=%ct")
-	cmd.Dir = path
-	cmd.SysProcAttr = getSysProcAttr()
-	out, err := cmd.Output()
-	if err == nil {
-		var sec int64
-		fmt.Sscanf(strings.TrimSpace(string(out)), "%d", &sec)
-		return time.Unix(sec, 0)
-	}
-	info, _ := os.Stat(path)
-	if info != nil {
-		return info.ModTime()
-	}
-	return time.Now()
 }
 
 func formatRelativeTime(t time.Time) string {
@@ -323,7 +181,7 @@ func openBrowser(url string) {
 		err = exec.Command("xdg-open", url).Start()
 	case "windows":
 		cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-		cmd.SysProcAttr = getSysProcAttr()
+		cmd.SysProcAttr = ui.GetSysProcAttr()
 		err = cmd.Start()
 	case "darwin":
 		err = exec.Command("open", url).Start()
@@ -335,32 +193,6 @@ func openBrowser(url string) {
 	}
 }
 
-func installHooksAll(bases []string) {
-	repos := findRepos(bases)
-	self, _ := os.Executable()
-	for _, repo := range repos {
-		installHook(repo, self)
-	}
-	fmt.Printf("Hooks installed in %d repositories.\n", len(repos))
-}
-
-func installHook(repoPath, selfPath string) {
-	hooksDir := filepath.Join(repoPath, ".git", "hooks")
-	os.MkdirAll(hooksDir, 0755)
-
-	hookNames := []string{"post-commit", "post-merge", "post-checkout", "post-rewrite", "post-applypatch", "post-reset", "post-update", "post-switch"}
-
-	// Convert path for bash (Windows compatibility)
-	selfPath = strings.ReplaceAll(selfPath, "\\", "/")
-
-	content := fmt.Sprintf("#!/bin/bash\n# Auto-generated by RepoSync\n\"%s\" run -q >/dev/null 2>&1 &\nexit 0\n", selfPath)
-
-	for _, name := range hookNames {
-		hookPath := filepath.Join(hooksDir, name)
-		os.WriteFile(hookPath, []byte(content), 0755)
-	}
-}
-
 func createShortcut() {
 	exePath, err := os.Executable()
 	if err != nil {
@@ -369,7 +201,6 @@ func createShortcut() {
 	}
 	exePath, _ = filepath.Abs(exePath)
 
-	// Se estiver rodando em desenvolvimento ou via 'go run', tenta encontrar o executável oficial
 	if !strings.Contains(filepath.ToSlash(exePath), "build/bin") {
 		wd, _ := os.Getwd()
 		officialName := "reposync"
@@ -400,7 +231,6 @@ func createLinuxShortcut(exePath string) {
 		return
 	}
 
-	// Extrair e salvar o ícone SVG embutido
 	iconsDir := filepath.Join(home, ".local", "share", "icons")
 	os.MkdirAll(iconsDir, 0755)
 	iconPath := filepath.Join(iconsDir, "reposync.svg")
@@ -408,7 +238,7 @@ func createLinuxShortcut(exePath string) {
 	err = os.WriteFile(iconPath, faviconSVG, 0644)
 	if err != nil {
 		fmt.Println("Aviso: Erro ao salvar ícone oficial localmente:", err)
-		iconPath = "reposync" // Tenta deixar o sistema descobrir sozinho caso falhe
+		iconPath = "reposync"
 	} else {
 		fmt.Println("Ícone extraído e instalado em:", iconPath)
 	}
@@ -459,8 +289,7 @@ func createWindowsShortcut(exePath string) {
 	desktopDir := filepath.Join(home, "Desktop")
 	shortcutPath := filepath.Join(desktopDir, "Reposync.lnk")
 
-	// Tenta extrair o ícone oficial para um local persistente
-	iconPath := exePath // Fallback para o ícone embutido no .exe
+	iconPath := exePath
 	configDir, err := os.UserConfigDir()
 	if err == nil {
 		appDir := filepath.Join(configDir, "reposync")
@@ -487,7 +316,7 @@ func createWindowsShortcut(exePath string) {
 
 	cmd := exec.Command("wscript", vbsPath)
 	if runtime.GOOS == "windows" {
-		cmd.SysProcAttr = getSysProcAttr()
+		cmd.SysProcAttr = ui.GetSysProcAttr()
 	}
 	if err := cmd.Run(); err != nil {
 		fmt.Println("Erro ao criar atalho no Windows:", err)

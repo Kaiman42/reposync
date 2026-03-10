@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ type Config struct {
 	Theme     string   `json:"theme"`
 }
 
-func loadConfig() Config {
+func LoadConfig() Config {
 	execPath, _ := os.Executable()
 	configPath := filepath.Join(filepath.Dir(execPath), "config.json")
 
@@ -20,7 +20,7 @@ func loadConfig() Config {
 	if err != nil {
 		cfg.BasePaths = []string{"D:\\Repos"}
 		cfg.Theme = "dark"
-		saveConfig(cfg)
+		SaveConfig(cfg)
 		return cfg
 	}
 
@@ -28,7 +28,7 @@ func loadConfig() Config {
 	return cfg
 }
 
-func saveConfig(cfg Config) {
+func SaveConfig(cfg Config) {
 	execPath, _ := os.Executable()
 	configPath := filepath.Join(filepath.Dir(execPath), "config.json")
 	data, _ := json.MarshalIndent(cfg, "", "  ")

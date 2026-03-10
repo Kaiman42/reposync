@@ -7,6 +7,10 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+
+	"github.com/Kaiman42/reposync/internal/config"
+	"github.com/Kaiman42/reposync/internal/git"
+	"github.com/Kaiman42/reposync/internal/ui"
 )
 
 // App struct
@@ -26,11 +30,11 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) GetRepos() []RepoInfo {
-	repos := findRepos(config.BasePaths)
+	repos := git.FindRepos(cfg.BasePaths)
 	var list []RepoInfo
 	for _, p := range repos {
-		status := getGitStatus(p)
-		modTime := getRepoLastMod(p)
+		status := git.GetGitStatus(p)
+		modTime := git.GetRepoLastMod(p)
 		list = append(list, RepoInfo{
 			Path:         p,
 			Name:         filepath.Base(p),
@@ -38,7 +42,7 @@ func (a *App) GetRepos() []RepoInfo {
 			Size:         getFolderSize(p),
 			LastChange:   modTime.Format("02/01/2006 15:04"),
 			RelativeTime: formatRelativeTime(modTime),
-			RemoteURL:    getRemoteURL(p),
+			RemoteURL:    git.GetRemoteURL(p),
 		})
 	}
 
@@ -59,34 +63,34 @@ type RepoInfo struct {
 }
 
 func (a *App) GetConfig() []string {
-	return config.BasePaths
+	return cfg.BasePaths
 }
 
 func (a *App) AddPath(path string) {
 	if path != "" {
 		exists := false
-		for _, p := range config.BasePaths {
+		for _, p := range cfg.BasePaths {
 			if strings.EqualFold(p, path) {
 				exists = true
 				break
 			}
 		}
 		if !exists {
-			config.BasePaths = append(config.BasePaths, path)
-			saveConfig(config)
+			cfg.BasePaths = append(cfg.BasePaths, path)
+			config.SaveConfig(cfg)
 		}
 	}
 }
 
 func (a *App) RemovePath(path string) {
 	newPaths := []string{}
-	for _, p := range config.BasePaths {
+	for _, p := range cfg.BasePaths {
 		if !strings.EqualFold(p, path) {
 			newPaths = append(newPaths, p)
 		}
 	}
-	config.BasePaths = newPaths
-	saveConfig(config)
+	cfg.BasePaths = newPaths
+	config.SaveConfig(cfg)
 }
 
 func (a *App) OpenAction(path, action string) {
@@ -99,7 +103,7 @@ func (a *App) OpenAction(path, action string) {
 		}
 	case "code":
 		cmd := exec.Command("code", path)
-		cmd.SysProcAttr = getSysProcAttr()
+		cmd.SysProcAttr = ui.GetSysProcAttr()
 		cmd.Run()
 	case "remote":
 		if path != "" {
@@ -115,7 +119,7 @@ func (a *App) GetRepoDetails(path string) map[string]interface{} {
 	runGit := func(args ...string) string {
 		cmd := exec.Command("git", args...)
 		cmd.Dir = path
-		cmd.SysProcAttr = getSysProcAttr()
+		cmd.SysProcAttr = ui.GetSysProcAttr()
 		out, _ := cmd.Output()
 		return strings.TrimSpace(string(out))
 	}
@@ -125,7 +129,7 @@ func (a *App) GetRepoDetails(path string) map[string]interface{} {
 	details["last_author"] = runGit("log", "-1", "--format=%an <%ae>")
 	details["last_date"] = runGit("log", "-1", "--format=%ai")
 	details["commit_count"] = runGit("rev-list", "--count", "HEAD")
-	details["remote_url"] = getRemoteURL(path)
+	details["remote_url"] = git.GetRemoteURL(path)
 	details["tags"] = runGit("tag")
 	details["stashes"] = runGit("stash", "list")
 	details["summary"] = runGit("shortlog", "-sn", "--all")

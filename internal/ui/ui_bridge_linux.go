@@ -1,22 +1,21 @@
 //go:build !windows
 
-package main
+package ui
 
 import (
 	"fmt"
 	"os/exec"
 )
 
-
-func updateDirectoryIcon(path, status string) bool {
+func UpdateDirectoryIcon(path, status string) bool {
 	return false
 }
 
-func refreshUI(_ []string) {
+func RefreshUI(_ []string) {
 	// Logic removed
 }
 
-func showMessage(title, message string) {
+func ShowMessage(title, message string) {
 	if path, err := exec.LookPath("zenity"); err == nil {
 		exec.Command(path, "--error", "--title="+title, "--text="+message).Run()
 	} else {
