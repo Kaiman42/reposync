@@ -28,7 +28,7 @@ var assets embed.FS
 //go:embed resources/reposync.svg
 var faviconSVG []byte
 
-//go:embed build/windows/icon.ico
+//go:embed resources/icon.ico
 var iconICO []byte
 
 var (
@@ -294,7 +294,11 @@ func createWindowsShortcut(exePath string) {
 	if err == nil {
 		appDir := filepath.Join(configDir, "reposync")
 		os.MkdirAll(appDir, 0755)
-		localIconPath := filepath.Join(appDir, "reposync.ico")
+		localIconPath := filepath.Join(appDir, "reposync_v2.ico")
+		
+		// Remove old icon to help refresh cache
+		os.Remove(filepath.Join(appDir, "reposync.ico"))
+		
 		err = os.WriteFile(localIconPath, iconICO, 0644)
 		if err == nil {
 			iconPath = localIconPath
