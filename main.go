@@ -116,18 +116,23 @@ func getSyncStatus(path string) string {
 	return "synced" // Verde
 }
 
-func updateRepo(repoPath string, quiet bool) {
+func updateRepo(repoPath string, quiet bool) bool {
 	status := getGitStatus(repoPath)
 	if !quiet {
 		fmt.Printf("%s: %s\n", repoPath, status)
 	}
+	return updateDirectoryIcon(repoPath, status)
 }
 
 func syncAll(quiet bool) {
 	repos := findRepos(config.BasePaths)
+	var updated []string
 	for _, repo := range repos {
-		updateRepo(repo, quiet)
+		if updateRepo(repo, quiet) {
+			updated = append(updated, repo)
+		}
 	}
+	refreshUI(updated)
 }
 
 func findRepos(bases []string) []string {

@@ -7,12 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 )
-
-func getSysProcAttr() *syscall.SysProcAttr {
-	return nil
-}
 
 var IconsLinux = map[string]string{
 	"not_init":     "folder-black",

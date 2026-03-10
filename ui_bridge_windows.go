@@ -11,10 +11,6 @@ import (
 	"unsafe"
 )
 
-func getSysProcAttr() *syscall.SysProcAttr {
-	return &syscall.SysProcAttr{HideWindow: true}
-}
-
 func showMessage(title, message string) {
 	user32 := syscall.NewLazyDLL("user32.dll")
 	messageBox := user32.NewProc("MessageBoxW")
