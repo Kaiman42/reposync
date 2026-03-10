@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
@@ -41,11 +40,6 @@ func startWatcher(bases []string) {
 				if !ok {
 					return
 				}
-				// Ignora alterações nos arquivos de ícones para evitar loop infinito
-				name := strings.ToLower(event.Name)
-				if strings.HasSuffix(name, "desktop.ini") || strings.HasSuffix(name, ".directory") {
-					continue
-				}
 
 				repo := findRepoRoot(event.Name)
 				if repo != "" {
@@ -78,13 +72,9 @@ func startWatcher(bases []string) {
 			mu.Unlock()
 
 			if len(toUpdate) > 0 {
-				var reallyUpdated []string
 				for _, repo := range toUpdate {
-					if updateRepo(repo, true) {
-						reallyUpdated = append(reallyUpdated, repo)
-					}
+					updateRepo(repo, true)
 				}
-				refreshUI(reallyUpdated)
 			}
 		}
 	}()

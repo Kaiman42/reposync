@@ -25,18 +25,6 @@ func showMessage(title, message string) {
 	messageBox.Call(0, uintptr(unsafe.Pointer(mPtr)), uintptr(unsafe.Pointer(tPtr)), 0)
 }
 
-func hideConsole() {
-	kernel32 := syscall.NewLazyDLL("kernel32.dll")
-	user32 := syscall.NewLazyDLL("user32.dll")
-	getConsoleWindow := kernel32.NewProc("GetConsoleWindow")
-	showWindow := user32.NewProc("ShowWindow")
-
-	hwnd, _, _ := getConsoleWindow.Call()
-	if hwnd != 0 {
-		showWindow.Call(hwnd, 0) // 0 = SW_HIDE
-	}
-}
-
 func getIconPath(name string) string {
 	execPath, _ := os.Executable()
 	baseDir := filepath.Dir(execPath)

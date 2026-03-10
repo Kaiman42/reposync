@@ -42,7 +42,7 @@ func updateDirectoryIcon(path, status string) bool {
 	return true
 }
 
-func refreshUI(paths []string) {
+func refreshUI(_ []string) {
 	for _, bin := range []string{"qdbus", "qdbus6"} {
 		if path, err := exec.LookPath(bin); err == nil {
 			exec.Command(path, "org.kde.dolphin", "/dolphin/Dolphin_1", "refresh").Run()
@@ -57,5 +57,3 @@ func showMessage(title, message string) {
 		fmt.Printf("[%s] %s\n", title, message)
 	}
 }
-
-func hideConsole() {}

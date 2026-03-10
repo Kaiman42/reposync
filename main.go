@@ -20,6 +20,9 @@ import (
 //go:embed all:frontend
 var assets embed.FS
 
+//go:embed linux/reposync.svg
+var faviconSVG []byte
+
 var (
 	config Config
 )
@@ -113,23 +116,18 @@ func getSyncStatus(path string) string {
 	return "synced" // Verde
 }
 
-func updateRepo(repoPath string, quiet bool) bool {
+func updateRepo(repoPath string, quiet bool) {
 	status := getGitStatus(repoPath)
 	if !quiet {
 		fmt.Printf("%s: %s\n", repoPath, status)
 	}
-	return updateDirectoryIcon(repoPath, status)
 }
 
 func syncAll(quiet bool) {
 	repos := findRepos(config.BasePaths)
-	var updated []string
 	for _, repo := range repos {
-		if updateRepo(repo, quiet) {
-			updated = append(updated, repo)
-		}
+		updateRepo(repo, quiet)
 	}
-	refreshUI(updated)
 }
 
 func findRepos(bases []string) []string {
@@ -173,6 +171,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  watch         Start watcher daemon\n")
 		fmt.Fprintf(os.Stderr, "  install-hooks Install git hooks in all repos\n")
 		fmt.Fprintf(os.Stderr, "  setup         Initial setup (hooks + run + watch)\n")
+		fmt.Fprintf(os.Stderr, "  create-shortcut Create a desktop shortcut automatically\n")
 		fmt.Fprintf(os.Stderr, "\nOptions:\n")
 		flag.PrintDefaults()
 	}
@@ -199,10 +198,13 @@ func main() {
 	case "install-hooks":
 		installHooksAll(config.BasePaths)
 	case "setup":
+		createShortcut()
 		installHooksAll(config.BasePaths)
 		syncAll(*quiet)
 		fmt.Println("\n[OK] Repositories initialized. Starting watcher...")
 		startWatcher(config.BasePaths)
+	case "create-shortcut":
+		createShortcut()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		flag.Usage()
@@ -352,5 +354,122 @@ func installHook(repoPath, selfPath string) {
 	for _, name := range hookNames {
 		hookPath := filepath.Join(hooksDir, name)
 		os.WriteFile(hookPath, []byte(content), 0755)
+	}
+}
+
+func createShortcut() {
+	exePath, err := os.Executable()
+	if err != nil {
+		fmt.Println("Erro ao obter caminho do executável:", err)
+		return
+	}
+	exePath, _ = filepath.Abs(exePath)
+
+	// Se estiver rodando um executável solto ou pelo 'wails dev', vamos forçar
+	// apontar para a versão oficial que o Wails gera na pasta build/bin/ se ela existir
+	projectName := filepath.Base(exePath)
+	wd, _ := os.Getwd()
+	wailsBinPath := filepath.Join(wd, "build", "bin", projectName)
+	if _, err := os.Stat(wailsBinPath); err == nil && !strings.Contains(filepath.ToSlash(exePath), "build/bin") {
+		exePath = wailsBinPath
+		fmt.Println("Usando o executável oficial do Wails em:", exePath)
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		createLinuxShortcut(exePath)
+	case "windows":
+		createWindowsShortcut(exePath)
+	default:
+		fmt.Println("Sistema não suportado para criar atalho automaticamente.")
+	}
+}
+
+func createLinuxShortcut(exePath string) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		fmt.Println("Erro ao obter diretório do usuário:", err)
+		return
+	}
+
+	// Extrair e salvar o ícone SVG embutido
+	iconsDir := filepath.Join(home, ".local", "share", "icons")
+	os.MkdirAll(iconsDir, 0755)
+	iconPath := filepath.Join(iconsDir, "reposync.svg")
+
+	err = os.WriteFile(iconPath, faviconSVG, 0644)
+	if err != nil {
+		fmt.Println("Aviso: Erro ao salvar ícone oficial localmente:", err)
+		iconPath = "reposync" // Tenta deixar o sistema descobrir sozinho caso falhe
+	} else {
+		fmt.Println("Ícone extraído e instalado em:", iconPath)
+	}
+
+	desktopContent := fmt.Sprintf(`[Desktop Entry]
+Name=Reposync
+Comment=Ferramenta de Sincronização de Repositórios
+Exec=%s dashboard
+Icon=%s
+Terminal=false
+Type=Application
+Categories=Development;Utility;
+StartupNotify=true
+`, exePath, iconPath)
+
+	var desktopDir string
+	cmd := exec.Command("xdg-user-dir", "DESKTOP")
+	out, err := cmd.Output()
+	if err == nil && len(strings.TrimSpace(string(out))) > 0 {
+		desktopDir = strings.TrimSpace(string(out))
+	} else {
+		desktopDir = filepath.Join(home, "Área de trabalho")
+		if _, err := os.Stat(desktopDir); os.IsNotExist(err) {
+			desktopDir = filepath.Join(home, "Desktop")
+		}
+	}
+
+	shortcutPath := filepath.Join(desktopDir, "Reposync.desktop")
+	err = os.WriteFile(shortcutPath, []byte(desktopContent), 0755)
+	if err != nil {
+		fmt.Println("Erro ao criar atalho na área de trabalho:", err)
+	} else {
+		fmt.Println("Atalho criado com sucesso na área de trabalho:", shortcutPath)
+		exec.Command("chmod", "+x", shortcutPath).Run()
+	}
+
+	appsDir := filepath.Join(home, ".local", "share", "applications")
+	os.MkdirAll(appsDir, 0755)
+	appShortcutPath := filepath.Join(appsDir, "reposync.desktop")
+	err = os.WriteFile(appShortcutPath, []byte(desktopContent), 0755)
+	if err == nil {
+		fmt.Println("Atalho criado no menu de aplicativos:", appShortcutPath)
+	}
+}
+
+func createWindowsShortcut(exePath string) {
+	home, _ := os.UserHomeDir()
+	desktopDir := filepath.Join(home, "Desktop")
+	shortcutPath := filepath.Join(desktopDir, "Reposync.lnk")
+
+	vbsContent := fmt.Sprintf("Set ws = CreateObject(\"WScript.Shell\")\n"+
+		"Set shortcut = ws.CreateShortcut(\"%s\")\n"+
+		"shortcut.TargetPath = \"%s\"\n"+
+		"shortcut.Arguments = \"dashboard\"\n"+
+		"shortcut.WorkingDirectory = \"%s\"\n"+
+		"shortcut.IconLocation = \"%s,0\"\n"+
+		"shortcut.Save\n", shortcutPath, exePath, filepath.Dir(exePath), exePath)
+
+	vbsPath := filepath.Join(os.TempDir(), "create_shortcut.vbs")
+	os.WriteFile(vbsPath, []byte(vbsContent), 0644)
+	defer os.Remove(vbsPath)
+
+	cmd := exec.Command("wscript", vbsPath)
+	if runtime.GOOS == "windows" {
+		cmd.SysProcAttr = getSysProcAttr()
+	}
+	if err := cmd.Run(); err != nil {
+		fmt.Println("Erro ao criar atalho no Windows:", err)
+	} else {
+		fmt.Println("Atalho criado com sucesso na Área de Trabalho:", shortcutPath)
 	}
 }

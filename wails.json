@@ -1,8 +1,23 @@
 {
-  "name": "reposync",
-  "assetdir": "frontend",
-  "author": {
-    "name": "Kaiman42",
-    "email": "kaimx@example.com"
-  }
+    "$schema": "https://wails.io/schemas/config.v2.json",
+    "name": "reposync",
+    "outputfilename": "reposync",
+    "frontend:install": "",
+    "frontend:build": "",
+    "frontend:dev:watcher": "",
+    "frontend:dir": "frontend",
+    "wailsjsdir": "./frontend",
+    "assetdir": "frontend",
+    "skipbindings": true,
+    "author": {
+        "name": "Kaiman42",
+        "email": "kaimx@example.com"
+    },
+    "info": {
+        "companyName": "Kaiman42",
+        "productName": "RepoSync",
+        "productVersion": "2.7.0",
+        "copyright": "Copyright 2026",
+        "comments": "Ferramenta de Sincronização de Repositórios"
+    }
 }

@@ -57,6 +57,12 @@ async function handleMenuAction(action) {
     if (!selectedRepo) return;
     switch (action) {
         case 'highlight': document.querySelector(`[data-path="${selectedRepo.path.replace(/\\/g, '\\\\')}"]`).classList.toggle('highlighted'); break;
+        case 'open_with':
+            const cmdName = prompt("Programa para abrir (ex: code, cursor, terminal):", "code");
+            if (cmdName) {
+                fetch('/api/open?path=' + encodeURIComponent(selectedRepo.path) + '&action=open_with&custom=' + encodeURIComponent(cmdName));
+            }
+            break;
         case 'remote':
             if (selectedRepo.remote_url) window.go.main.App.OpenAction(selectedRepo.remote_url, 'remote');
             else alert('Nenhum remoto configurado.'); break;
