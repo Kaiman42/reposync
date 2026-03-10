@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
@@ -19,8 +20,8 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
-//go:embed index.html style.css script.js
-var assets embed.FS
+//go:embed frontend
+var frontendFiles embed.FS
 
 //go:embed linux/reposync.svg
 var faviconSVG []byte
@@ -66,6 +67,7 @@ func (h *apiHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func startDashboard() {
+	assets, _ := fs.Sub(frontendFiles, "frontend")
 	app := NewApp()
 
 	err := wails.Run(&options.App{

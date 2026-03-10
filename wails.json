@@ -5,8 +5,8 @@
     "frontend:install": "",
     "frontend:build": "",
     "frontend:dev:watcher": "",
-    "frontend:dev:serverUrl": "",
-    "wailsjsdir": ".",
+    "frontend:dir": "frontend",
+    "wailsjsdir": "./frontend",
     "skipbindings": true,
     "author": {
         "name": "Kaiman42"
