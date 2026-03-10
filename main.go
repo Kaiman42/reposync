@@ -23,6 +23,9 @@ var assets embed.FS
 //go:embed linux/reposync.svg
 var faviconSVG []byte
 
+//go:embed icons/Reposync.ico
+var iconICO []byte
+
 var (
 	config Config
 )
@@ -370,14 +373,18 @@ func createShortcut() {
 	}
 	exePath, _ = filepath.Abs(exePath)
 
-	// Se estiver rodando um executável solto ou pelo 'wails dev', vamos forçar
-	// apontar para a versão oficial que o Wails gera na pasta build/bin/ se ela existir
-	projectName := filepath.Base(exePath)
-	wd, _ := os.Getwd()
-	wailsBinPath := filepath.Join(wd, "build", "bin", projectName)
-	if _, err := os.Stat(wailsBinPath); err == nil && !strings.Contains(filepath.ToSlash(exePath), "build/bin") {
-		exePath = wailsBinPath
-		fmt.Println("Usando o executável oficial do Wails em:", exePath)
+	// Se estiver rodando em desenvolvimento ou via 'go run', tenta encontrar o executável oficial
+	if !strings.Contains(filepath.ToSlash(exePath), "build/bin") {
+		wd, _ := os.Getwd()
+		officialName := "reposync"
+		if runtime.GOOS == "windows" {
+			officialName += ".exe"
+		}
+		target := filepath.Join(wd, "build", "bin", officialName)
+		if _, err := os.Stat(target); err == nil {
+			exePath = target
+			fmt.Println("Usando o executável oficial encontrado em:", exePath)
+		}
 	}
 
 	switch runtime.GOOS {
@@ -456,13 +463,27 @@ func createWindowsShortcut(exePath string) {
 	desktopDir := filepath.Join(home, "Desktop")
 	shortcutPath := filepath.Join(desktopDir, "Reposync.lnk")
 
+	// Tenta extrair o ícone oficial para um local persistente
+	iconPath := exePath // Fallback para o ícone embutido no .exe
+	configDir, err := os.UserConfigDir()
+	if err == nil {
+		appDir := filepath.Join(configDir, "reposync")
+		os.MkdirAll(appDir, 0755)
+		localIconPath := filepath.Join(appDir, "reposync.ico")
+		err = os.WriteFile(localIconPath, iconICO, 0644)
+		if err == nil {
+			iconPath = localIconPath
+			fmt.Println("Ícone oficial extraído para:", iconPath)
+		}
+	}
+
 	vbsContent := fmt.Sprintf("Set ws = CreateObject(\"WScript.Shell\")\n"+
 		"Set shortcut = ws.CreateShortcut(\"%s\")\n"+
 		"shortcut.TargetPath = \"%s\"\n"+
 		"shortcut.Arguments = \"dashboard\"\n"+
 		"shortcut.WorkingDirectory = \"%s\"\n"+
-		"shortcut.IconLocation = \"%s,0\"\n"+
-		"shortcut.Save\n", shortcutPath, exePath, filepath.Dir(exePath), exePath)
+		"shortcut.IconLocation = \"%s\"\n"+
+		"shortcut.Save\n", shortcutPath, exePath, filepath.Dir(exePath), iconPath)
 
 	vbsPath := filepath.Join(os.TempDir(), "create_shortcut.vbs")
 	os.WriteFile(vbsPath, []byte(vbsContent), 0644)
