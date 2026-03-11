@@ -25,10 +25,10 @@ import (
 //go:embed all:frontend
 var assets embed.FS
 
-//go:embed resources/reposync.svg
+//go:embed build/linux/reposync.svg
 var faviconSVG []byte
 
-//go:embed resources/icon.ico
+//go:embed build/windows/reposync.ico
 var iconICO []byte
 
 var (

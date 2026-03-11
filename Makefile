@@ -26,6 +26,9 @@ help:
 build:
 	@echo "Compilando o RepoSync para $(SISTEMA)..."
 	$(COMANDO_BUILD)
+	-@if exist "build\appicon.png" del /q "build\appicon.png" 2>nul || true
+	-@if exist "build\windows\icon.ico" del /q "build\windows\icon.ico" 2>nul || true
+	-@rm -f build/appicon.png build/windows/icon.ico 2>/dev/null || true
 
 dev:
 	@echo "Iniciando o modo de desenvolvimento..."
