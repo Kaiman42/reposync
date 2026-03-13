@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 
 	"github.com/Kaiman42/reposync/internal/config"
 	"github.com/Kaiman42/reposync/internal/git"
@@ -119,16 +120,29 @@ func startDashboardGUI() {
 	}
 
 	err = wails.Run(&options.App{
-		Title:  "RepoSync Dashboard",
-		Width:  1024,
-		Height: 768,
+		Title:         "RepoSync Dashboard",
+		Width:         1024,
+		Height:        768,
+		DisableResize: true,
+		Frameless:     true,
 		AssetServer: &assetserver.Options{
 			Assets: assetsRoot,
 		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		BackgroundColour: &options.RGBA{R: 5, G: 7, B: 10, A: 0},
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,
+		},
+		Windows: &windows.Options{
+			WebviewIsTransparent:              true,
+			WindowIsTranslucent:               true,
+			BackdropType:                      windows.None,
+			DisableWindowIcon:                 true,
+			DisableFramelessWindowDecorations: true,
+			Theme:                             windows.Dark,
+		},
+		Debug: options.Debug{
+			OpenInspectorOnStartup: true,
 		},
 	})
 	if err != nil {

@@ -10,42 +10,52 @@
 </head>
 
 <body oncontextmenu="return false;">
-    <div id="loader">
-        <div class="sync-animation"></div>
-    </div>
+    <div class="app-window">
+        <div id="loader">
+            <div class="sync-animation"></div>
+        </div>
 
-    <div id="contextMenu" class="context-menu">
-        <div class="menu-item" onclick="handleMenuAction('open_with')">Abrir com</div>
-        <div class="menu-item" onclick="handleMenuAction('highlight')">Destacar</div>
-        <div class="menu-item" onclick="handleMenuAction('remote')">Abrir Repositório Remoto</div>
-        <div class="menu-sep"></div>
-        <div class="menu-item" onclick="handleMenuAction('monitoring')">Ver no Monitoramento</div>
-        <div class="menu-item" onclick="handleMenuAction('stats')">Estatísticas Git</div>
-    </div>
+        <div id="contextMenu" class="context-menu">
+            <div class="menu-item" onclick="handleMenuAction('open_with')">Abrir com</div>
+            <div class="menu-item" onclick="handleMenuAction('highlight')">Destacar</div>
+            <div class="menu-item" onclick="handleMenuAction('remote')">Abrir Repositório Remoto</div>
+            <div class="menu-sep"></div>
+            <div class="menu-item" onclick="handleMenuAction('monitoring')">Ver no Monitoramento</div>
+            <div class="menu-item" onclick="handleMenuAction('stats')">Estatísticas Git</div>
+        </div>
 
-    <div class="titlebar">RepoSync Alpha — v2.7.0</div>
-
-    <div class="layout">
-        <aside>
-            <div class="logo">
-                <div class="logo-dot"></div> RepoSync
+        <div class="titlebar">
+            <div class="app-title">
+                <img src="icon.svg" width="18" height="18" style="margin-right: 8px;">
+                RepoSync
             </div>
-            <div class="nav-group">
-                <div class="nav-label">Workspace</div>
-                <div class="nav-item active" id="nav-repos" onclick="setTab('repos', this)">Projetos</div>
-                <div class="nav-item" id="nav-monitoring" onclick="setTab('monitoring', this)">Monitoramento</div>
-                <div class="nav-item" id="nav-stats" onclick="setTab('stats', this)">Estatísticas Git</div>
+            <div class="window-controls">
+                <button class="window-control minimize-btn" id="minimizeBtn" title="Minimizar">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button class="window-control settings-btn" id="settingsBtn" title="Configurações">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+                <button class="window-control close-btn" id="closeBtn" title="Fechar">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
             </div>
-            <div class="sidebar-footer">
-                <div class="daemon-info">
-                    <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
-                        <div>
-                            <div class="daemon-label">Daemon Engine</div>
-                            <div class="daemon-status">
-                                <span class="status-dot"></span>
-                                Online
+        </div>
+
+        <div class="layout">
+            <aside>
+                <div class="nav-group">
+                    <div class="nav-label">Workspace</div>
+                    <div class="nav-item active" id="nav-repos" onclick="setTab('repos', this)">Projetos</div>
+                    <div class="nav-item" id="nav-monitoring" onclick="setTab('monitoring', this)">Monitoramento</div>
+                    <div class="nav-item" id="nav-stats" onclick="setTab('stats', this)">Estatísticas Git</div>
+                </div>
+                <div class="sidebar-footer" style="margin-top: auto;">
+                    <div class="daemon-info" style="border-top: 1px solid var(--border); padding-top: 16px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; width:100%;">
+                            <div style="opacity: 0.4; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.05em; font-family: monospace;">
+                                <span id="appVersionText">2.8.0</span>
                             </div>
-                        </div>
                         <button class="icon-btn" onclick="openDaemonModal()"
                             style="background:transparent; border:none; color:var(--text-dim); cursor:pointer; padding:4px;">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
@@ -232,7 +242,10 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
-</body>
-
-</html>
+        </div>
+    </div>
+ 
+     <script src="script.js"></script>
+ </body>
+ 
+ </html>

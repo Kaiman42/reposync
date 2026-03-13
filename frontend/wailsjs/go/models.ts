@@ -8,6 +8,7 @@ export namespace main {
 	    last_change: string;
 	    relative_time: string;
 	    remote_url: string;
+	    commit_count: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new RepoInfo(source);
@@ -22,6 +23,7 @@ export namespace main {
 	        this.last_change = source["last_change"];
 	        this.relative_time = source["relative_time"];
 	        this.remote_url = source["remote_url"];
+	        this.commit_count = source["commit_count"];
 	    }
 	}
 

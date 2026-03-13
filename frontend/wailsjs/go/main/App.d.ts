@@ -10,6 +10,10 @@ export function GetRepoDetails(arg1:string):Promise<Record<string, any>>;
 
 export function GetRepos():Promise<Array<main.RepoInfo>>;
 
+export function Minimize():Promise<void>;
+
 export function OpenAction(arg1:string,arg2:string):Promise<void>;
+
+export function Quit():Promise<void>;
 
 export function RemovePath(arg1:string):Promise<void>;

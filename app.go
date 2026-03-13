@@ -6,11 +6,13 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Kaiman42/reposync/internal/config"
 	"github.com/Kaiman42/reposync/internal/git"
 	"github.com/Kaiman42/reposync/internal/ui"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -35,6 +37,15 @@ func (a *App) GetRepos() []RepoInfo {
 	for _, p := range repos {
 		status := git.GetGitStatus(p)
 		modTime := git.GetRepoLastMod(p)
+		
+		// Iniciar commit count
+		commitCount := 0
+		cmd := exec.Command("git", "rev-list", "--count", "HEAD")
+		cmd.Dir = p
+		if out, err := cmd.Output(); err == nil {
+			commitCount, _ = strconv.Atoi(strings.TrimSpace(string(out)))
+		}
+
 		list = append(list, RepoInfo{
 			Path:         p,
 			Name:         filepath.Base(p),
@@ -43,6 +54,7 @@ func (a *App) GetRepos() []RepoInfo {
 			LastChange:   modTime.Format("02/01/2006 15:04"),
 			RelativeTime: formatRelativeTime(modTime),
 			RemoteURL:    git.GetRemoteURL(p),
+			CommitCount:  commitCount,
 		})
 	}
 
@@ -60,6 +72,7 @@ type RepoInfo struct {
 	LastChange   string `json:"last_change"`
 	RelativeTime string `json:"relative_time"`
 	RemoteURL    string `json:"remote_url"`
+	CommitCount  int    `json:"commit_count"`
 }
 
 func (a *App) GetConfig() []string {
@@ -137,4 +150,18 @@ func (a *App) GetRepoDetails(path string) map[string]interface{} {
 	details["disk_usage"] = runGit("count-objects", "-vH")
 
 	return details
+}
+
+// Minimize minimiza a janela do aplicativo
+func (a *App) Minimize() {
+	if a.ctx != nil {
+		wailsRuntime.WindowMinimise(a.ctx)
+	}
+}
+
+// Quit fecha o aplicativo
+func (a *App) Quit() {
+	if a.ctx != nil {
+		wailsRuntime.Quit(a.ctx)
+	}
 }

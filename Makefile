@@ -1,39 +1,123 @@
-.PHONY: all help build dev shortcut
-
-# Detecção de Sistema Operacional
+# Detecção de OS e Variáveis de Caminhos
 ifeq ($(OS),Windows_NT)
-    EXECUTAVEL = build/bin/reposync.exe
-    COMANDO_BUILD = wails build
-    SISTEMA = Windows
+    PLATFORM := windows
+    PREFIX ?= $(USERPROFILE)\.local
+    BINDIR = $(PREFIX)\bin
+    SHAREDIR = $(PREFIX)\share\reposync
+    DESKTOP = $(USERPROFILE)\Desktop
+    STARTMENU = $(APPDATA)\Microsoft\Windows\Start Menu\Programs
+    RM := del /Q /F
+    RMDIR := rmdir /S /Q
+    CP = copy /y
+    MKDIR = powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path"
+    TAGS := 
+    FIXPATH = $(subst /,\,$1)
+    
+    SETUP_ICONS = @$(CP) build\windows\reposync.ico build\windows\icon.ico >nul && $(CP) build\reposync.png build\appicon.png >nul
+    CLEAN_ICONS = -@$(RM) build\windows\icon.ico build\appicon.png 2>nul || exit 0
 else
-    EXECUTAVEL = build/bin/reposync
-    COMANDO_BUILD = wails build -tags webkit2_41
-    SISTEMA = Linux
+    PLATFORM := linux
+    PREFIX ?= $(HOME)/.local
+    BINDIR = $(PREFIX)/bin
+    APPDIR = $(PREFIX)/share/applications
+    ICONDIR = $(PREFIX)/share/icons/hicolor
+    SCALABLE_DIR = $(ICONDIR)/scalable/apps
+    PNGICON_DIR = $(ICONDIR)/512x512/apps
+    SHAREDIR = $(PREFIX)/share/reposync
+    RM := rm -f
+    RMDIR := rm -rf
+    TAGS := -tags webkit2_41
+    FIXPATH = $1
+    
+    SETUP_ICONS = @$(CP) build/reposync.png build/appicon.png
+    CLEAN_ICONS = -@$(RM) build/appicon.png
 endif
+
+.PHONY: all help build build-linux build-windows clean dev dev-internal install uninstall
+
+all: help
 
 help:
 	@echo "========================================="
 	@echo "        RepoSync Build System            "
 	@echo "========================================="
-	@echo "Sistema detectado: $(SISTEMA)"
+	@echo "Sistema detectado: $(PLATFORM)"
 	@echo "Comandos disponíveis:"
-	@echo "  make build    - Compila o executável oficial"
-	@echo "  make dev      - Inicia o modo de desenvolvimento (wails dev)"
-	@echo "  make shortcut - Compila e cria o atalho no Desktop"
-	@echo ""
-	@echo "AVISO: No Windows, certifique-se de usar o Git Bash ou Mingw para rodar o 'make'."
+	@echo "  make build    - Compila para todas as plataformas"
+	@echo "  make dev      - Inicia modo desenvolvimento (com auto-elevação)"
+	@echo "  make install  - Instala no sistema e cria atalhos"
+	@echo "  make clean    - Limpa arquivos de build"
 
-build:
-	@echo "Compilando o RepoSync para $(SISTEMA)..."
-	$(COMANDO_BUILD)
-	-@if exist "build\appicon.png" del /q "build\appicon.png" 2>nul || true
-	-@if exist "build\windows\icon.ico" del /q "build\windows\icon.ico" 2>nul || true
-	-@rm -f build/appicon.png build/windows/icon.ico 2>/dev/null || true
+build: build-linux build-windows
+
+build-linux:
+	@echo "Construindo para Linux..."
+	$(SETUP_ICONS)
+	wails build -platform linux/amd64 -tags webkit2_41 -clean
+	$(CLEAN_ICONS)
+
+build-windows:
+	@echo "Construindo para Windows..."
+	$(SETUP_ICONS)
+	wails build -platform windows/amd64 -clean
+	$(CLEAN_ICONS)
 
 dev:
-	@echo "Iniciando o modo de desenvolvimento..."
-	wails dev
+	$(MAKE) dev-internal
 
-shortcut: build
-	@echo "Criando os atalhos no sistema $(SISTEMA)..."
-	./$(EXECUTAVEL) create-shortcut
+dev-internal:
+	@echo "Iniciando servidor de desenvolvimento..."
+	$(SETUP_ICONS)
+	-wails dev $(TAGS)
+	$(CLEAN_ICONS)
+
+clean:
+	@$(RMDIR) build/bin frontend/wailsjs 2>nul || true
+	$(CLEAN_ICONS)
+
+install:
+ifeq ($(OS),Windows_NT)
+	@echo "Instalando RepoSync no Windows..."
+	$(MAKE) build-windows
+	@$(MKDIR) "$(BINDIR)"
+	@$(MKDIR) "$(SHAREDIR)"
+	@$(CP) build\bin\reposync.exe "$(BINDIR)\reposync.exe"
+	@$(CP) build\windows\reposync.ico "$(SHAREDIR)\reposync.ico"
+	
+	@echo "Criando atalhos..."
+	@powershell -NoProfile -Command "\
+		$$ws = New-Object -ComObject WScript.Shell; \
+		$$desktop = [Environment]::GetFolderPath('Desktop'); \
+		$$startMenu = [System.IO.Path]::Combine([Environment]::GetFolderPath('StartMenu'), 'Programs'); \
+		\
+		foreach ($$path in @(\"$$desktop\RepoSync.lnk\", \"$$startMenu\RepoSync.lnk\")) { \
+			$$s = $$ws.CreateShortcut($$path); \
+			$$s.TargetPath = '$(BINDIR)\reposync.exe'; \
+			$$s.Arguments = 'dashboard'; \
+			$$s.IconLocation = '$(SHAREDIR)\reposync.ico,0'; \
+			$$s.Save(); \
+		}"
+	@echo "Instalação concluída!"
+else
+	$(MAKE) build-linux
+	@echo "Instalando RepoSync no Linux..."
+	@mkdir -p $(BINDIR) $(SHAREDIR) $(ICONDIR)
+	install -m 755 build/bin/reposync $(BINDIR)/reposync
+	@echo "Instalação concluída!"
+endif
+
+uninstall:
+ifeq ($(OS),Windows_NT)
+	@echo "Desinstalando RepoSync..."
+	-@if exist "$(BINDIR)\reposync.exe" $(RM) "$(BINDIR)\reposync.exe"
+	-@powershell -NoProfile -Command "\
+		$$desktop = [Environment]::GetFolderPath('Desktop'); \
+		$$startMenu = [System.IO.Path]::Combine([Environment]::GetFolderPath('StartMenu'), 'Programs'); \
+		if (Test-Path \"$$desktop\RepoSync.lnk\") { Remove-Item \"$$desktop\RepoSync.lnk\" -Force }; \
+		if (Test-Path \"$$startMenu\RepoSync.lnk\") { Remove-Item \"$$startMenu\RepoSync.lnk\" -Force };"
+	@echo "Desinstalação concluída!"
+else
+	@echo "Desinstalando RepoSync..."
+	rm -f $(BINDIR)/reposync
+	@echo "Desinstalação concluída!"
+endif

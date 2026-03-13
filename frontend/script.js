@@ -25,8 +25,22 @@ async function fetchData() {
             window.go.main.App.GetConfig()
         ]);
         allRepos = rep;
+        
+        // Verifica se os caminhos mudaram antes de atualizar a UI de monitoramento
+        const pathsChanged = JSON.stringify(cfg) !== JSON.stringify(basePaths);
         basePaths = cfg;
-        updateMonitoredOptions();
+        
+        // Calcular versão baseada em commits
+        const totalCommits = allRepos.reduce((acc, r) => acc + (r.commit_count || 0), 0);
+        const versionText = document.getElementById('appVersionText');
+        if (versionText) {
+            versionText.textContent = `2.8.${totalCommits}`;
+        }
+
+        if (pathsChanged) {
+            updateMonitoredOptions();
+        }
+        
         renderRepos();
     } catch (e) { console.error(e); } finally { hideLoader(); }
 }
@@ -261,14 +275,24 @@ async function fetchBasePaths() {
         basePaths = await window.go.main.App.GetConfig();
         const list = document.getElementById('basePathsList');
         list.innerHTML = '';
-        basePaths.forEach(p => {
-            const item = document.createElement('div');
-            item.dataset.path = p;
-            item.style = 'display:flex; justify-content:space-between; align-items:center; padding:16px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border)';
-            item.innerHTML = `<div><div style="font-weight:600; color:white">${p}</div></div>
-                <button class="action-btn" style="background:rgba(244,63,94,0.1); color:#f43f5e;" onclick="event.stopPropagation(); removePath('${p.replace(/\\/g, '\\\\')}')">Remover</button>`;
-            list.appendChild(item);
-        });
+        
+        if (!basePaths || basePaths.length === 0) {
+            list.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: var(--text-dim); background: rgba(255, 255, 255, 0.02); border-radius: 12px; border: 1px dashed var(--border);">
+                    <div style="font-size: 2rem; margin-bottom: 12px;">📂</div>
+                    <p style="font-weight: 500;">Nenhum caminho monitorado</p>
+                    <p style="font-size: 0.8rem; margin-top: 4px;">Adicione uma pasta para começar a sincronizar seus projetos.</p>
+                </div>`;
+        } else {
+            basePaths.forEach(p => {
+                const item = document.createElement('div');
+                item.dataset.path = p;
+                item.style = 'display:flex; justify-content:space-between; align-items:center; padding:16px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border)';
+                item.innerHTML = `<div><div style="font-weight:600; color:white">${p}</div></div>
+                    <button class="action-btn" style="background:rgba(244,63,94,0.1); color:#f43f5e;" onclick="event.stopPropagation(); removePath('${p.replace(/\\/g, '\\\\')}')">Remover</button>`;
+                list.appendChild(item);
+            });
+        }
         updateMonitoredOptions();
     } catch (e) { console.error(e); }
 }
@@ -301,7 +325,10 @@ async function controlDaemon(action) {
 
 async function initCustomSelects() {
     document.querySelectorAll('select.control-btn').forEach(select => {
+        // Se já existe e não é o sortMonitored, ignora (evita fechar dropdowns abertos)
         if (select.nextElementSibling?.classList.contains('custom-select')) {
+            if (select.id !== 'sortMonitored') return;
+            // Se for o sortMonitored, vamos apenas atualizar os itens se necessário
             select.nextElementSibling.remove();
         }
 
@@ -347,4 +374,13 @@ async function initCustomSelects() {
 }
 window.addEventListener('click', () => document.querySelectorAll('.custom-select').forEach(s => s.classList.remove('active')));
 
-window.onload = async () => { await fetchData(); initCustomSelects(); };
+
+window.onload = async () => { 
+    await fetchData(); 
+    initCustomSelects(); 
+
+    // Window Controls
+    document.getElementById('minimizeBtn').onclick = () => window.go.main.App.Minimize();
+    document.getElementById('closeBtn').onclick = () => window.go.main.App.Quit();
+    // document.getElementById('settingsBtn') - implement setting modal if needed
+};

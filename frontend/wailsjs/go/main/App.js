@@ -18,8 +18,16 @@ export function GetRepos() {
   return window['go']['main']['App']['GetRepos']();
 }
 
+export function Minimize() {
+  return window['go']['main']['App']['Minimize']();
+}
+
 export function OpenAction(arg1, arg2) {
   return window['go']['main']['App']['OpenAction'](arg1, arg2);
+}
+
+export function Quit() {
+  return window['go']['main']['App']['Quit']();
 }
 
 export function RemovePath(arg1) {
