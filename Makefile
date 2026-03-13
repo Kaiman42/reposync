@@ -13,8 +13,12 @@ ifeq ($(OS),Windows_NT)
     TAGS := 
     FIXPATH = $(subst /,\,$1)
     
-    SETUP_ICONS = @$(CP) build\windows\reposync.ico build\windows\icon.ico >nul && $(CP) build\reposync.png build\appicon.png >nul
-    CLEAN_ICONS = -@$(RM) build\windows\icon.ico build\appicon.png 2>nul || exit 0
+    SETUP_ICONS = @$(CP) build\windows\reposync.ico build\windows\icon.ico >nul && \
+                  $(CP) build\reposync.png build\appicon.png >nul && \
+                  $(CP) build\linux\reposync.svg frontend\icon.svg >nul
+    CLEAN_ICONS = -@powershell -NoProfile -Command "\
+        $$files = @('build\windows\icon.ico', 'build\appicon.png', 'frontend\icon.svg'); \
+        foreach ($$f in $$files) { if (Test-Path $$f) { Remove-Item $$f -Force } }"
 else
     PLATFORM := linux
     PREFIX ?= $(HOME)/.local
@@ -83,6 +87,13 @@ ifeq ($(OS),Windows_NT)
 	@$(MKDIR) "$(SHAREDIR)"
 	@$(CP) build\bin\reposync.exe "$(BINDIR)\reposync.exe"
 	@$(CP) build\windows\reposync.ico "$(SHAREDIR)\reposync.ico"
+	
+	@echo "Limpando atalhos antigos..."
+	@powershell -NoProfile -Command "\
+		$$desktop = [Environment]::GetFolderPath('Desktop'); \
+		$$startMenu = [System.IO.Path]::Combine([Environment]::GetFolderPath('StartMenu'), 'Programs'); \
+		if (Test-Path \"$$desktop\RepoSync.lnk\") { Remove-Item \"$$desktop\RepoSync.lnk\" -Force }; \
+		if (Test-Path \"$$startMenu\RepoSync.lnk\") { Remove-Item \"$$startMenu\RepoSync.lnk\" -Force };"
 	
 	@echo "Criando atalhos..."
 	@powershell -NoProfile -Command "\

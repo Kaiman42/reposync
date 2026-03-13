@@ -18,7 +18,10 @@ function setTab(tab, el) {
 }
 
 // Data Management
+let isFetching = false;
 async function fetchData() {
+    if (isFetching) return;
+    isFetching = true;
     try {
         const [rep, cfg] = await Promise.all([
             window.go.main.App.GetRepos(),
@@ -42,7 +45,10 @@ async function fetchData() {
         }
         
         renderRepos();
-    } catch (e) { console.error(e); } finally { hideLoader(); }
+    } catch (e) { console.error(e); } finally { 
+        isFetching = false;
+        hideLoader(); 
+    }
 }
 
 // Polling auto-update (Faster check)

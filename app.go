@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/Kaiman42/reposync/internal/config"
 	"github.com/Kaiman42/reposync/internal/git"
@@ -34,29 +35,41 @@ func (a *App) startup(ctx context.Context) {
 func (a *App) GetRepos() []RepoInfo {
 	repos := git.FindRepos(cfg.BasePaths)
 	var list []RepoInfo
-	for _, p := range repos {
-		status := git.GetGitStatus(p)
-		modTime := git.GetRepoLastMod(p)
-		
-		// Iniciar commit count
-		commitCount := 0
-		cmd := exec.Command("git", "rev-list", "--count", "HEAD")
-		cmd.Dir = p
-		if out, err := cmd.Output(); err == nil {
-			commitCount, _ = strconv.Atoi(strings.TrimSpace(string(out)))
-		}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
 
-		list = append(list, RepoInfo{
-			Path:         p,
-			Name:         filepath.Base(p),
-			Status:       status,
-			Size:         getFolderSize(p),
-			LastChange:   modTime.Format("02/01/2006 15:04"),
-			RelativeTime: formatRelativeTime(modTime),
-			RemoteURL:    git.GetRemoteURL(p),
-			CommitCount:  commitCount,
-		})
+	for _, p := range repos {
+		wg.Add(1)
+		go func(path string) {
+			defer wg.Done()
+			status := git.GetGitStatus(path)
+			modTime := git.GetRepoLastMod(path)
+
+			// Iniciar commit count
+			commitCount := 0
+			cmd := exec.Command("git", "rev-list", "--count", "HEAD")
+			cmd.Dir = path
+			cmd.SysProcAttr = ui.GetSysProcAttr()
+			if out, err := cmd.Output(); err == nil {
+				commitCount, _ = strconv.Atoi(strings.TrimSpace(string(out)))
+			}
+
+			mu.Lock()
+			list = append(list, RepoInfo{
+				Path:         path,
+				Name:         filepath.Base(path),
+				Status:       status,
+				Size:         getFolderSize(path),
+				LastChange:   modTime.Format("02/01/2006 15:04"),
+				RelativeTime: formatRelativeTime(modTime),
+				RemoteURL:    git.GetRemoteURL(path),
+				CommitCount:  commitCount,
+			})
+			mu.Unlock()
+		}(p)
 	}
+
+	wg.Wait()
 
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].Name < list[j].Name
@@ -110,7 +123,9 @@ func (a *App) OpenAction(path, action string) {
 	switch action {
 	case "explorer":
 		if runtime.GOOS == "windows" {
-			exec.Command("explorer", path).Run()
+			cmd := exec.Command("explorer", path)
+			cmd.SysProcAttr = ui.GetSysProcAttr()
+			cmd.Run()
 		} else {
 			exec.Command("xdg-open", path).Run()
 		}
