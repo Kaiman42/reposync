@@ -31,6 +31,7 @@ else
     RM := rm -f
     RMDIR := rm -rf
     TAGS := -tags webkit2_41
+    CP = cp
     FIXPATH = $1
     
     SETUP_ICONS = @$(CP) build/reposync.png build/appicon.png
