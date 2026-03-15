@@ -85,36 +85,18 @@ ifeq ($(OS),Windows_NT)
 	@echo "Instalando RepoSync no Windows..."
 	$(MAKE) build-windows
 	@$(MKDIR) "$(BINDIR)"
-	@$(MKDIR) "$(SHAREDIR)"
 	@$(CP) build\bin\reposync.exe "$(BINDIR)\reposync.exe"
-	@$(CP) build\windows\reposync.ico "$(SHAREDIR)\reposync.ico"
 	
-	@echo "Limpando atalhos antigos..."
-	@powershell -NoProfile -Command "\
-		$$desktop = [Environment]::GetFolderPath('Desktop'); \
-		$$startMenu = [System.IO.Path]::Combine([Environment]::GetFolderPath('StartMenu'), 'Programs'); \
-		if (Test-Path \"$$desktop\RepoSync.lnk\") { Remove-Item \"$$desktop\RepoSync.lnk\" -Force }; \
-		if (Test-Path \"$$startMenu\RepoSync.lnk\") { Remove-Item \"$$startMenu\RepoSync.lnk\" -Force };"
+	# Criar atalhos via CLI
+	"$(BINDIR)\reposync.exe" create-shortcut
 	
-	@echo "Criando atalhos..."
-	@powershell -NoProfile -Command "\
-		$$ws = New-Object -ComObject WScript.Shell; \
-		$$desktop = [Environment]::GetFolderPath('Desktop'); \
-		$$startMenu = [System.IO.Path]::Combine([Environment]::GetFolderPath('StartMenu'), 'Programs'); \
-		\
-		foreach ($$path in @(\"$$desktop\RepoSync.lnk\", \"$$startMenu\RepoSync.lnk\")) { \
-			$$s = $$ws.CreateShortcut($$path); \
-			$$s.TargetPath = '$(BINDIR)\reposync.exe'; \
-			$$s.Arguments = 'dashboard'; \
-			$$s.IconLocation = '$(SHAREDIR)\reposync.ico,0'; \
-			$$s.Save(); \
-		}"
 	@echo "Instalação concluída!"
 else
 	$(MAKE) build-linux
 	@echo "Instalando RepoSync no Linux..."
 	@mkdir -p $(BINDIR) $(SHAREDIR) $(ICONDIR)
 	install -m 755 build/bin/reposync $(BINDIR)/reposync
+	$(BINDIR)/reposync create-shortcut
 	@echo "Instalação concluída!"
 endif
 

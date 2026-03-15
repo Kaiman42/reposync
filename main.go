@@ -132,7 +132,7 @@ func startDashboardGUI() {
 		AssetServer: &assetserver.Options{
 			Assets: assetsRoot,
 		},
-		BackgroundColour: &options.RGBA{R: 5, G: 7, B: 10, A: 0},
+		BackgroundColour: &options.RGBA{R: 12, G: 12, B: 14, A: 0},
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,
@@ -275,6 +275,7 @@ Terminal=false
 Type=Application
 Categories=Development;Utility;
 StartupNotify=true
+StartupWMClass=reposync
 `, exePath, iconPath)
 
 	var desktopDir string
@@ -349,5 +350,27 @@ func createWindowsShortcut(exePath string) {
 		fmt.Println("Erro ao criar atalho no Windows:", err)
 	} else {
 		fmt.Println("Atalho criado com sucesso na Área de Trabalho:", shortcutPath)
+	}
+
+	// Também adicionar ao Menu Iniciar
+	startMenuDir := filepath.Join(os.Getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs")
+	if _, err := os.Stat(startMenuDir); err == nil {
+		startMenuShortcutPath := filepath.Join(startMenuDir, "Reposync.lnk")
+		vbsContentStart := fmt.Sprintf("Set ws = CreateObject(\"WScript.Shell\")\n"+
+			"Set shortcut = ws.CreateShortcut(\"%s\")\n"+
+			"shortcut.TargetPath = \"%s\"\n"+
+			"shortcut.Arguments = \"dashboard\"\n"+
+			"shortcut.WorkingDirectory = \"%s\"\n"+
+			"shortcut.IconLocation = \"%s\"\n"+
+			"shortcut.Save\n", startMenuShortcutPath, exePath, filepath.Dir(exePath), iconPath)
+		vbsPathStart := filepath.Join(os.TempDir(), "create_shortcut_start.vbs")
+		os.WriteFile(vbsPathStart, []byte(vbsContentStart), 0644)
+		defer os.Remove(vbsPathStart)
+		
+		cmdStart := exec.Command("wscript", vbsPathStart)
+		if runtime.GOOS == "windows" {
+			cmdStart.SysProcAttr = ui.GetSysProcAttr()
+		}
+		cmdStart.Run()
 	}
 }

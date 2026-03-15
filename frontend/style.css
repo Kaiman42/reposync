@@ -78,7 +78,7 @@ body {
   justify-content: space-between;
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), transparent);
   border-bottom: 1px solid var(--border);
-  z-index: 50;
+  z-index: 9999;
   --wails-draggable: drag;
 }
 
